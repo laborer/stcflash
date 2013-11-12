@@ -462,13 +462,13 @@ def usage():
 
     print("Usage: %s [OPTION]... [bin file]" % sys.argv[0])
     print("""
-  -p, --port       specify serial port (default: %s)
+  -p, --port       specify serial port (default: %(port)s)
   -l, --lowbaud    specify lower baudrate (default: 2400)
   -r, --protocol   specify flashing procotol (default: auto)
   -v, --verbose    be verbose
   -d, --debug      print debug message
   -h, --help       give this help list
-""" % port)
+""" % {'port': port})
   
 
 def main():
@@ -523,6 +523,7 @@ def main():
         with open(args[0], 'rb') as f:
             code = f.read()
 
+    print("Connect to %s at baudrate %d" % (port, lowbaud))
     with serial.Serial(port=port, baudrate=lowbaud) as conn:
         program(Programmer(conn, protocol), code)
 
