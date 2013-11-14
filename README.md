@@ -42,7 +42,7 @@ Detecting target... done
 
 Please note that, just like using the official STC programmer, once
 the "Detecting target..." prompt is shown, you need to turn off and on
-the microcontroller to enable the in-system programming (ISP) routing,
+the microcontroller to enable the in-system programming (ISP) routine,
 otherwise, stcflash cannot connect to the target.
 
 If the microcontoller does not hook up to the first USB-to-serial
