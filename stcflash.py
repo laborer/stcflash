@@ -393,8 +393,7 @@ def program(prog, code):
     #         print("[%c] %s" % ('X' if prog.info[2] & key != 0 else ' ', desc))
 
     if prog.protocol is None:
-        print("Unsupported target")
-        return
+        raise IOError("Unsupported target")
 
     if code is None:
         return
@@ -512,7 +511,7 @@ def main():
                             }[a]
             except:
                 print("Unknown protocol")
-                sys.exit()
+                sys.exit(2)
 
     logging.basicConfig(format=('%(levelname)s: '
                                 + '[%(relativeCreated)d] '
