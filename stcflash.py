@@ -369,6 +369,17 @@ class Programmer:
         time.sleep(0.2)
 
 
+def autoisp(conn, baud, magic):
+    if not magic:
+        return
+
+    bak = conn.baudrate
+    conn.baudrate = baud;
+    conn.write(magic);
+    conn.flush()
+    time.sleep(0.5)
+    conn.baudrate = bak
+
 def program(prog, code):
     sys.stdout.write("Detecting target...")
     sys.stdout.flush()
@@ -464,6 +475,8 @@ def usage():
   -p, --port       specify serial port (default: %(port)s)
   -l, --lowbaud    specify lower baudrate (default: 2400)
   -r, --protocol   specify flashing procotol (default: auto)
+  -a, --aispbaud   specify the baudrate for AutoISP (default: 4800)
+  -m, --aispmagic  specify the magic word to restart to ISP mode
   -v, --verbose    be verbose
   -d, --debug      print debug message
   -h, --help       give this help list
@@ -476,16 +489,20 @@ def main():
     loglevel = logging.CRITICAL
     code = None
     protocol = None
-
+    aispbaud = 4800
+    aispmagic = None
+    
     try:
         opts, args = getopt.getopt(sys.argv[1:], 
-                                   "vdhp:l:r:", 
+                                   "vdhp:l:r:a:m:", 
                                    ["verbose", 
                                     "debug", 
                                     "help", 
                                     "port=", 
                                     "lowbaud=", 
-                                    "protocol="])
+                                    "protocol=",
+                                    "aispbaud=",
+                                    "aispmagic="])
     except getopt.GetoptError as err:
         print(err)
         usage()
@@ -512,6 +529,10 @@ def main():
             except:
                 print("Unknown protocol")
                 sys.exit(2)
+        elif o in ('-a', '--aispbaud'):
+            aispbaud = int(a)
+        elif o in ('-m', '--aispmagic'):
+            aispmagic = a;
 
     logging.basicConfig(format=('%(levelname)s: '
                                 + '[%(relativeCreated)d] '
@@ -524,6 +545,7 @@ def main():
 
     print("Connect to %s at baudrate %d" % (port, lowbaud))
     with serial.Serial(port=port, baudrate=lowbaud) as conn:
+        autoisp(conn, aispbaud, aispmagic)
         program(Programmer(conn, protocol), code)
 
 

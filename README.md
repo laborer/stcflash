@@ -45,7 +45,7 @@ the "Detecting target..." prompt is shown, you need to turn off and on
 the microcontroller to enable the in-system programming (ISP) routine,
 otherwise, stcflash cannot connect to the target.
 
-If the microcontoller does not hook up to the first USB-to-serial
+If the microcontroller does not hook up to the first USB-to-serial
 port, You can use `--port` to specify a different serial port.  It is
 also possible to specify a different initial baudrate using
 `--lowbaud` option, although this should not be necessary in most
@@ -61,7 +61,8 @@ To download program into the target, the compiled code must be in
 binary format (.bin), as it is the only format that stcflash supports.
 If you want to program an Intel HEX file (.ihx or .hex), it needs to
 be converted to binary format first.  On a Linux system, this can be
-done as follows,
+done using objcopy or makebin, which comes with the open source MCS-51
+compiler sdcc.
 
 ```
 $ objcopy -Iihex -Obinary program.hex program.bin
@@ -81,11 +82,11 @@ Erasing target... done
 Programming: #################### done
 ```
 
-At this moment, stcflash can program STC89C5xx, STC12C5Axx, STC12C52xx
-series and their low voltage variants.  It might work properly with
-other series by specifying a programming protocol using `--protocol`
-option.  For example, if a microcontoller uses the same programming
-protocol as STC89C5xx series, then you can program it as follows,
+For now, stcflash can program STC89C5xx, STC12C5Axx, STC12C52xx series
+and their low voltage variants.  It might work properly with other
+series by specifying a programming protocol using `--protocol` option.
+For example, if a microcontroller uses the same programming protocol
+as STC89C5xx series, then you can program it as follows,
 
 ```
 $ python stcflash.py --protocol 89 program.bin
@@ -96,6 +97,17 @@ then use the following command instead,
 
 ```
 $ python stcflash.py --protocol 12 program.bin
+```
+
+Before connecting to a microcontroller using one of the ISP protocols,
+stcflash can send a magic word first at a given baudrate to ask the
+microcontroller to enter ISP mode without user switching its power off
+and on.  Of course, the user program on the microcontroller must be
+able to reboot itself to the ISP section upon receiving the magic word
+to make this scheme work.  The following is an example,
+
+```
+$ python stcflash.py --aispbaud 2400 --aispmagic 6af23Qtr program.bin
 ```
 
 Troubleshooting
