@@ -79,6 +79,7 @@ Detecting target... done
  ROM: 8KB
 Baudrate: 38400
 Erasing target... done
+Size of the binary: 917
 Programming: #################### done
 ```
 

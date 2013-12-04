@@ -436,6 +436,8 @@ def program(prog, code):
 
     print(" done")
 
+    print("Size of the binary: %d" % len(code));
+
     # print("Programming: ", end='', flush=True)
     sys.stdout.write("Programming: ")
     sys.stdout.flush()
@@ -448,7 +450,6 @@ def program(prog, code):
         sys.stdout.flush()
         oldbar = bar
 
-    # print()
     print(" done")
 
     if prog.protocol == PROTOCOL_STC12:
