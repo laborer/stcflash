@@ -83,11 +83,12 @@ Size of the binary: 917
 Programming: #################### done
 ```
 
-For now, stcflash can program STC89C5xx, STC12C5Axx, STC12C52xx series
-and their low voltage variants.  It might work properly with other
-series by specifying a programming protocol using `--protocol` option.
-For example, if a microcontroller uses the same programming protocol
-as STC89C5xx series, then you can program it as follows,
+For now, stcflash can program STC89/90C5xx, STC10Fxx, STC12C5Axx and
+STC12C52xx series and their low voltage variants.  It might work
+properly with other series by specifying a programming protocol using
+`--protocol` option.  For example, if a microcontroller uses the same
+programming protocol as STC89C5xx series, then you can program it as
+follows,
 
 ```
 $ python stcflash.py --protocol 89 program.bin

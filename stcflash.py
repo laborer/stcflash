@@ -109,8 +109,10 @@ class Programmer:
                                      (0x60, 0x7F): ('F', 'XE'),
                                      (0xA0, 0xBF): ('L', ''),
                                      (0xC0, 0xDF): ('L', 'X'),
-                                     (0xE0, 0xFF): ('L', 'XE')}),
+                                     (0xE0, 0xFF): ('L', 'XE'),
+                                     }),
                     0xF0: ('89', 4, {(0x00, 0x10): ('C5', 'RC'),
+                                     (0x20, 0x30): ('C5', 'RC'),  #STC90C5xRC
                                      }),
                     0xF1: ('89', 4, {(0x00, 0x10): ('C5', 'RD+'),
                                      }),
@@ -131,6 +133,9 @@ class Programmer:
             model = tuple(model)
             
             prefix, romratio, fixmap = modelmap[model[0]]
+
+            if model[0] == 0xF0 and 0x20 <= model[1] <= 0x30:
+                prefix = '90'
 
             for key, value in fixmap.items():
                 if key[0] <= model[1] <= key[1]:
@@ -234,10 +239,11 @@ class Programmer:
 
         if self.protocol is None:
             try:
-                self.protocol = {0xF0: PROTOCOL_STC89,
-                                 0xF1: PROTOCOL_STC89,
-                                 0xD1: PROTOCOL_STC12,
-                                 0xE1: PROTOCOL_STC12,
+                self.protocol = {0xF0: PROTOCOL_STC89,  #STC89/90C5xRC
+                                 0xF1: PROTOCOL_STC89,  #STC89C5xRD+
+                                 0xD1: PROTOCOL_STC12,  #STC12C5Ax
+                                 0xD2: PROTOCOL_STC12,  #STC10Fx
+                                 0xE1: PROTOCOL_STC12,  #STC12C52x
                                  }[self.model[0]]
             except KeyError:
                 pass
@@ -345,7 +351,10 @@ class Programmer:
                              + [0x00] * 12
                              + [i for i in range(0x80, 0x0D, -1)]))
             cmd, dat = self.recv()
-            assert cmd == 0x00 and not dat
+            assert cmd == 0x00
+            if dat:
+                logging.info("Serial number: " 
+                             + ' '.join(['%02X' % j for j in dat]))
         
     def flash(self, code):
         code = [ord(i) for i in code] if sys.version_info[0] < 3 else list(code)
