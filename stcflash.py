@@ -25,6 +25,7 @@ import serial
 
 PROTOCOL_STC89 = 89
 PROTOCOL_STC12 = 12
+PROTOCOL_STC12Cx052 = 12.1052
 
 
 class Programmer:
@@ -33,7 +34,6 @@ class Programmer:
         self.protocol = protocol
 
         self.conn.timeout = 0.05
-        # self.bytetime = 0.02
         self.chkmode = 0
 
     def __conn_read(self, size):
@@ -239,16 +239,19 @@ class Programmer:
 
         if self.protocol is None:
             try:
-                self.protocol = {0xF0: PROTOCOL_STC89,  #STC89/90C5xRC
-                                 0xF1: PROTOCOL_STC89,  #STC89C5xRD+
-                                 0xD1: PROTOCOL_STC12,  #STC12C5Ax
-                                 0xD2: PROTOCOL_STC12,  #STC10Fx
-                                 0xE1: PROTOCOL_STC12,  #STC12C52x
+                self.protocol = {0xF0: PROTOCOL_STC89,       #STC89/90C5xRC
+                                 0xF1: PROTOCOL_STC89,       #STC89C5xRD+
+                                 0xF2: PROTOCOL_STC12Cx052,  #STC12Cx052
+                                 0xD1: PROTOCOL_STC12,       #STC12C5Ax
+                                 0xD2: PROTOCOL_STC12,       #STC10Fx
+                                 0xE1: PROTOCOL_STC12,       #STC12C52x
+                                 0xE2: PROTOCOL_STC12,       #STC11Fx
+                                 0xE6: PROTOCOL_STC12,       #STC12C56x
                                  }[self.model[0]]
             except KeyError:
                 pass
             
-        if self.protocol == PROTOCOL_STC89:
+        if self.protocol in (PROTOCOL_STC89, PROTOCOL_STC12Cx052):
             self.chkmode = 1
             self.conn.parity = serial.PARITY_NONE
         elif self.protocol == PROTOCOL_STC12:
@@ -277,7 +280,7 @@ class Programmer:
                      14400, 9600, 4800, 2400, 1200]:
 
             t = self.fosc * 1000000 / baud / 32
-            if self.protocol == PROTOCOL_STC12:
+            if self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
                 t *= 2
 
             if abs(round(t) - t) / t > 0.03:
@@ -285,7 +288,7 @@ class Programmer:
 
             if self.protocol == PROTOCOL_STC89:
                 tcfg = 0x10000 - int(t + 0.5)
-            elif self.protocol == PROTOCOL_STC12:
+            elif self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
                 if t > 0xFF:
                     continue
                 tcfg = 0xC000 + 0x100 - int(t + 0.5)
@@ -303,7 +306,7 @@ class Programmer:
 
             if self.protocol == PROTOCOL_STC89:
                 freqlist = (40, 20, 10, 5)
-            elif self.protocol == PROTOCOL_STC12:
+            elif self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
                 freqlist = (30, 24, 20, 12, 6, 3, 2, 1)
 
             for twait in range(0, len(freqlist)):
@@ -345,13 +348,15 @@ class Programmer:
             cmd, dat = self.recv()
             assert cmd == 0x80 and not dat
 
-        elif self.protocol == PROTOCOL_STC12:
+        elif self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
             self.send(0x84, ([0x00, 0x00, self.romsize * 4,
                               0x00, 0x00, self.romsize * 4]
                              + [0x00] * 12
                              + [i for i in range(0x80, 0x0D, -1)]))
             cmd, dat = self.recv()
-            assert cmd == 0x00
+            assert (self.protocol != PROTOCOL_STC12Cx052 
+                    or (cmd == 0x80 and not dat))
+            assert (self.protocol != PROTOCOL_STC12 or cmd == 0x00)
             if dat:
                 logging.info("Serial number: " 
                              + ' '.join(['%02X' % j for j in dat]))
@@ -430,7 +435,7 @@ def program(prog, code):
 
     print(prog.baudrate)
 
-    if prog.protocol == PROTOCOL_STC89:
+    if prog.protocol in (PROTOCOL_STC89, PROTOCOL_STC12Cx052):
         for i in range(5):
             logging.info("Send unknown packet (80 00 00 36 01 ...)")
 
@@ -534,8 +539,9 @@ def main():
             try:
                 protocol = {'89': PROTOCOL_STC89,
                             '12': PROTOCOL_STC12,
+                            '12cx052': PROTOCOL_STC12Cx052,
                             'auto': None,
-                            }[a]
+                            }[a.lower()]
             except:
                 print("Unknown protocol")
                 sys.exit(2)
