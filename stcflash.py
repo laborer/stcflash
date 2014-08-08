@@ -115,6 +115,7 @@ class Programmer:
                                      (0x20, 0x30): ('C5', 'RC'),  #STC90C5xRC
                                      }),
                     0xF1: ('89', 4, {(0x00, 0x10): ('C5', 'RD+'),
+                                     (0x20, 0x30): ('C5', 'RD+'),  #STC90C5xRD+
                                      }),
                     0xF2: ('12', 1, {(0x00, 0x0F): ('C', '052'),
                                      (0x10, 0x1F): ('C', '052AD'),
@@ -134,7 +135,7 @@ class Programmer:
             
             prefix, romratio, fixmap = modelmap[model[0]]
 
-            if model[0] == 0xF0 and 0x20 <= model[1] <= 0x30:
+            if model[0] in (0xF0, 0xF1) and 0x20 <= model[1] <= 0x30:
                 prefix = '90'
 
             for key, value in fixmap.items():
@@ -175,6 +176,7 @@ class Programmer:
             except IOError:
                 continue
         else:
+            logging.debug('recv(..): timeout'); 
             raise IOError()
 
         chksum = start[-1]
@@ -182,17 +184,21 @@ class Programmer:
         s = self.__conn_read(2)
         n = s[0] * 256 + s[1]
         if n > 64:
+            logging.debug('recv(..): incorrect packet size');
             raise IOError()
         chksum += sum(s);
 
         s = self.__conn_read(n - 3)
         if s[n - 4] != 0x16:
+            logging.debug('recv(..): missing terminal symbol');
             raise IOError()
         
         chksum += sum(s[:-(1+self.chkmode)])
         if self.chkmode > 0 and chksum & 0xFF != s[-2]:
+            logging.debug('recv(..): incorrect checksum[0]');
             raise IOError()
         elif self.chkmode > 1 and (chksum >> 8) & 0xFF != s[-3]:
+            logging.debug('recv(..): incorrect checksum[1]');
             raise IOError()
         
         return (s[0], s[1:-(1+self.chkmode)])
@@ -240,7 +246,7 @@ class Programmer:
         if self.protocol is None:
             try:
                 self.protocol = {0xF0: PROTOCOL_STC89,       #STC89/90C5xRC
-                                 0xF1: PROTOCOL_STC89,       #STC89C5xRD+
+                                 0xF1: PROTOCOL_STC89,       #STC89/90C5xRD+
                                  0xF2: PROTOCOL_STC12Cx052,  #STC12Cx052
                                  0xD1: PROTOCOL_STC12,       #STC12C5Ax
                                  0xD2: PROTOCOL_STC12,       #STC10Fx
@@ -560,8 +566,11 @@ def main():
             code = f.read()
 
     print("Connect to %s at baudrate %d" % (port, lowbaud))
-    with serial.Serial(port=port, baudrate=lowbaud) as conn:
-        autoisp(conn, aispbaud, aispmagic)
+    with serial.Serial(port=port, 
+                       baudrate=lowbaud, 
+                       parity=serial.PARITY_NONE) as conn:
+        if aispmagic:
+            autoisp(conn, aispbaud, aispmagic)
         program(Programmer(conn, protocol), code)
 
 
