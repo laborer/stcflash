@@ -89,10 +89,10 @@ voltage variants.
 > STC89C5xRC, STC89C5xRD+, STC90C5xRC, STC10Fxx, STC11Fxx,
 > STC12Cx052x, STC12C52xx, STC12C56xx, STC12C5Axx
 
-It might work properly with other series by specifying a programming
-protocol using `--protocol` option.  For example, if a microcontroller
-uses the same programming protocol as STC89C5xRC series, then you can
-program it as follows,
+If stcflash is unable detect the microcontroller, specifying the
+programming protocol using `--protocol` option might solve the
+problem.  For example, if a microcontroller uses the same programming
+protocol as STC89C5xRC series, then you can program it as follows,
 
 ```
 $ python stcflash.py --protocol 89 program.bin
