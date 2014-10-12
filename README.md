@@ -89,7 +89,7 @@ voltage variants.
 > STC89C5xRC, STC89C5xRD+, STC90C5xRC, STC10Fxx, STC11Fxx,
 > STC12Cx052x, STC12C52xx, STC12C56xx, STC12C5Axx
 
-If stcflash is unable detect the microcontroller, specifying the
+If stcflash is unable to detect the microcontroller, specifying the
 programming protocol using `--protocol` option might solve the
 problem.  For example, if a microcontroller uses the same programming
 protocol as STC89C5xRC series, then you can program it as follows,

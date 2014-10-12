@@ -357,7 +357,7 @@ class Programmer:
         if self.protocol == PROTOCOL_STC89:
             self.send(0x84, [0x01, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33])
             cmd, dat = self.recv(10)
-            assert cmd == 0x80 and not dat
+            assert cmd == 0x80
 
         elif self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
             self.send(0x84, ([0x00, 0x00, self.romsize * 4,
@@ -365,8 +365,7 @@ class Programmer:
                              + [0x00] * 12
                              + [i for i in range(0x80, 0x0D, -1)]))
             cmd, dat = self.recv(10)
-            assert (self.protocol != PROTOCOL_STC12Cx052 
-                    or (cmd == 0x80 and not dat))
+            assert (self.protocol != PROTOCOL_STC12Cx052 or cmd == 0x80)
             assert (self.protocol != PROTOCOL_STC12 or cmd == 0x00)
             if dat:
                 logging.info("Serial number: " 
