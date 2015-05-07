@@ -494,6 +494,7 @@ def program(prog, code):
 
 def usage():
     port = 'COM3' if sys.platform.startswith('win') else '/dev/ttyUSB0'
+    port = '/dev/tty.usbserial' if sys.platform == 'darwin' else port
 
     print("Usage: %s [OPTION]... [bin file]" % sys.argv[0])
     print("""
@@ -510,6 +511,7 @@ def usage():
 
 def main():
     port = 'COM3' if sys.platform.startswith('win') else '/dev/ttyUSB0'
+    port = '/dev/tty.usbserial' if sys.platform == 'darwin' else port
     lowbaud = 2400
     loglevel = logging.CRITICAL
     code = None
