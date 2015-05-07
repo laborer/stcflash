@@ -18,7 +18,7 @@ Installation
 [Python](http://www.python.org) (>=2.6) and its serial port extension
 model [pySerial](http://pyserial.sf.net/) are required to run
 stcflash.  Python is most likely pre-installed if you are using a
-mainstream Linux distribution.  Module pySerial, on the other hand,
+mainstream Linux distribution or OS X.  Module pySerial, on the other hand,
 might need to be installed manually.  For example, on Ubuntu, you must
 install package python-serial (or python3-serial for Python 3) to get
 pySerial.  For operating system without a package management system
@@ -57,21 +57,13 @@ Connect to /dev/ttyUSB1 at baudrate 1200
 Detecting target...
 ```
 
-To download program into the target, the compiled code must be in
-binary format (.bin), as it is the only format that stcflash supports.
-If you want to program an Intel HEX file (.ihx or .hex), it needs to
-be converted to binary format first.  On a Linux system, this can be
-done using objcopy or makebin, which comes with the open source MCS-51
-compiler sdcc.
+To download program into the target, the compiled code can be in
+binary format (.bin) or Intel HEX file (.ihx or .hex, **experimental, use at your own risk**). Now stcflash supports both of them.
+
+You can program the .hex file directly using the following command,
 
 ```
-$ objcopy -Iihex -Obinary program.hex program.bin
-```
-
-Then you can program the .bin file using the following command,
-
-```
-$ python stcflash.py program.bin
+$ python stcflash.py program.hex
 Connect to /dev/ttyUSB0 at baudrate 2400
 Detecting target... done
  FOSC: 11.955MHz
@@ -81,6 +73,21 @@ Baudrate: 38400
 Erasing target... done
 Size of the binary: 917
 Programming: #################### done
+```
+
+As for programming an Intel HEX file and converting it to binary format, they can also be done using objcopy or makebin on Linux systems, which comes with the open source MCS-51
+compiler sdcc.
+
+```
+$ objcopy -Iihex -Obinary program.hex program.bin
+```
+
+On OS X, "objcopy" may be called "gobjcopy", and you must install "binutils" before using it by Homebrew or MacPorts. 
+
+Then you can program the .bin file using the following command,
+
+```
+$ python stcflash.py program.bin
 ```
 
 For now, stcflash can program the following series and their low
