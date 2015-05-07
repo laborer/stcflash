@@ -575,7 +575,7 @@ def hex2bin(fileName):
                 break
 
             dataAddr = int(src[9:13], 16)
-            checksum += (dataAddr>>2) + (dataAddr & 0xFF)
+            checksum += (dataAddr>>8) + (dataAddr & 0xFF)
 
             # Checksum at end
             checksum += int(src[-2:], 16)
@@ -593,7 +593,7 @@ def hex2bin(fileName):
                 break
 
             dataAddr = int(src[9:13], 16)
-            checksum += (dataAddr>>2) + (dataAddr & 0xFF)
+            checksum += (dataAddr>>8) + (dataAddr & 0xFF)
 
             # Checksum at end
             checksum += int(src[-2:], 16)
