@@ -22,6 +22,7 @@ import sys
 import getopt
 import serial
 import os
+import cStringIO
 
 
 PROTOCOL_STC89 = 89
@@ -510,114 +511,89 @@ def usage():
 """ % {'port': port})
   
 # Convert hex to bin format
-def hex2bin(fileName):
-    error = False
-    highAddr = 0
+def hex2bin(hexData):
+    try:
+        output = cStringIO.StringIO()
+        highAddr = 0
+        line = 0
+        for src in hexData.replace("\r",'').split("\n"):
+            line += 1
+            if len(src) < 11 or src[0] != ':': 
+                raise Exception('Invalid format at line %d' % line)
 
-    hexFile = open(fileName, 'rb')
-    binFile = open(fileName+'.bin', 'wb')
-    
-    hexData = hexFile.read()
-    for src in hexData.replace("\r",'').split("\n"):
-        if len(src) < 11 or src[0] != ':': 
-            # Invalid data
-            error = True
-            break
+            # Get length of the data
+            dataLen = int(src[1:3], 16)
+            checksum = dataLen
 
-        # Get length of the data
-        dataLen = int(src[1:3], 16)
-        checksum = dataLen
-
-        # Get address of the data
-        dataAddr = int(src[3:7], 16)
-        checksum += (dataAddr>>8) + (dataAddr & 0xFF)
-
-        # Get data type
-        dataType = int(src[7:9], 16)
-        checksum += dataType
-
-        if dataType == 0:      # Data record
-            dst = ''
-            for i in range(0, dataLen):
-                t = int(src[9+2*i:9+2*i+2], 16)
-                checksum += t
-                dst += chr(t)
-
-            # Checksum at end
-            checksum += int(src[-2:], 16)
-
-            if checksum & 0xFF == 0:
-                binFile.seek(highAddr + dataAddr)
-                binFile.write(dst)
-            else:
-                print 'hex2bin ERROR: Wrong checksum!'
-                error = True
-                break
-
-        elif dataType == 1:    # EOF record
-            if dataAddr != 0: 
-                error = True
-                break
-
-            # Checksum at end
-            checksum += int(src[-2:], 16)
-
-            if checksum & 0xFF == 0:
-                break
-            else:
-                print 'hex2bin ERROR: Wrong checksum!'
-                error = True
-                break
-
-        elif dataType == 2:    # Extended segment address record
-            if dataAddr != 0: 
-                error = True
-                break
-
-            dataAddr = int(src[9:13], 16)
+            # Get address of the data
+            dataAddr = int(src[3:7], 16)
             checksum += (dataAddr>>8) + (dataAddr & 0xFF)
 
-            # Checksum at end
-            checksum += int(src[-2:], 16)
+            # Get data type
+            dataType = int(src[7:9], 16)
+            checksum += dataType
 
-            if checksum & 0xFF == 0:
-                highAddr = dataAddr << 2;
+            if dataType == 0:      # Data record
+                dst = ''
+                for i in range(0, dataLen):
+                    t = int(src[9+2*i:9+2*i+2], 16)
+                    checksum += t
+                    dst += chr(t)
+
+                # Checksum
+                checksum += int(src[-2:], 16)
+                if checksum & 0xFF == 0:
+                    output.seek(highAddr + dataAddr)
+                    output.write(dst)
+                else:
+                    raise Exception('Wrong checksum at line %d' % line)
+
+            elif dataType == 1:    # EOF record
+                if dataAddr != 0: raise Exception('Wrong data at line %d' % line)
+
+                checksum += int(src[-2:], 16)
+                if checksum & 0xFF == 0:
+                    break
+                else:
+                    raise Exception('Wrong checksum at line %d' % line)
+
+            elif dataType == 2:    # Extended segment address record
+                if dataAddr != 0: raise Exception('Invalid data at line %d' % line)
+
+                dataAddr = int(src[9:13], 16)
+                checksum += (dataAddr>>8) + (dataAddr & 0xFF)
+
+                checksum += int(src[-2:], 16)
+                if checksum & 0xFF == 0:
+                    highAddr = dataAddr << 2;
+                else:
+                    raise Exception('Wrong checksum at line %d' % line)
+
+            elif dataType == 4:    # Extended linear address record
+                if dataAddr != 0: raise Exception('Invalid data at line %d' % line)
+
+                dataAddr = int(src[9:13], 16)
+                checksum += (dataAddr>>8) + (dataAddr & 0xFF)
+
+                checksum += int(src[-2:], 16)
+                if checksum & 0xFF == 0:
+                    highAddr = dataAddr << 16;
+                else:
+                    raise Exception('Wrong checksum at line %d' % line)
+
             else:
-                print 'hex2bin ERROR: Wrong checksum!'
-                error = True
-                break
+                raise Exception('Wrong datatype at line %d' % line)
 
-        elif dataType == 4:    # Extended linear address record
-            if dataAddr != 0:
-                error = True
-                break
+        code = output.getvalue()
 
-            dataAddr = int(src[9:13], 16)
-            checksum += (dataAddr>>8) + (dataAddr & 0xFF)
+    except Exception, e:
+        print 'hex2bin Error:', e
+        code = -1
 
-            # Checksum at end
-            checksum += int(src[-2:], 16)
+    finally:
+        output.close()
 
-            if checksum & 0xFF == 0:
-                highAddr = dataAddr << 16;
-            else:
-                print 'hex2bin ERROR: Wrong checksum!'
-                error = True
-                break
-        else:
-            print 'hex2bin ERROR: Wrong datatype!'
-            error = True
-            break
-
-    hexFile.close()
-    binFile.close()
-    if error:
-        return -1
-
-    binFile = open(fileName+'.bin', 'rb')
-    binCode = binFile.read()
-    binFile.close() 
-    return binCode
+    return code
 
 
 def main():
@@ -679,12 +655,12 @@ def main():
                         level=loglevel)
 
     if len(args) > 0:
-        if os.path.splitext(args[0])[1] in ('.hex', '.ihx'):
-            code = hex2bin(args[0])
-            if code == -1: sys.exit(2)
-        else:
-            with open(args[0], 'rb') as f:
-                code = f.read()
+        with open(args[0], 'rb') as f:
+            code = f.read()
+            # Parse HEX file
+            if os.path.splitext(args[0])[1] in ('.hex', '.ihx'):
+                code = hex2bin(code)
+                if code == -1: sys.exit(2)
 
     print("Connect to %s at baudrate %d" % (port, lowbaud))
     with serial.Serial(port=port, 
