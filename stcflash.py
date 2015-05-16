@@ -21,8 +21,8 @@ import logging
 import sys
 import getopt
 import serial
-import os
-import cStringIO
+import os.path
+import binascii
 
 
 PROTOCOL_STC89 = 89
@@ -44,24 +44,22 @@ class Programmer:
         self.chkmode = 0
 
     def __conn_read(self, size):
-        buf = []
+        buf = bytearray()
         while len(buf) < size:
-            s = [i if isinstance(i, int) else ord(i) 
-                 for i in self.conn.read(size - len(buf))]
-            buf += s
+            s = bytearray(self.conn.read(size - len(buf)))
+            buf += s;
 
             logging.debug("recv: " + ' '.join(['%02X' % i for i in s]))
 
             if len(s) == 0:
                 raise IOError()
 
-        return buf
+        return list(buf)
 
     def __conn_write(self, s):
         logging.debug("send: " + ' '.join(['%02X' % i for i in s]))
-        
-        s = ''.join(chr(i) for i in s) if sys.version_info[0] < 3 else bytes(s)
-        self.conn.write(s)
+
+        self.conn.write(bytearray(s))
 
     def __conn_baudrate(self, baud, flush=True):
         logging.debug("baud: %d" % baud)
@@ -139,7 +137,7 @@ class Programmer:
 
         try:
             model = tuple(model)
-            
+
             prefix, romratio, fixmap = modelmap[model[0]]
 
             if model[0] in (0xF0, 0xF1) and 0x20 <= model[1] <= 0x30:
@@ -152,22 +150,22 @@ class Programmer:
                 raise KeyError()
 
             infix, postfix = value
-            
+
             romsize = romratio * (model[1] - key[0])
 
             try:
                 romsize = {(0xF0, 0x03): 13}[model]
             except KeyError:
                 pass
-            
+
             if model[0] in (0xF0, 0xF1):
                 romfix = str(model[1] - key[0])
             elif model[0] in (0xF2,):
                 romfix = str(romsize)
             else:
                 romfix = '%02d' % romsize
-            
-            name = 'IAP' if model in iapmcu else 'STC' 
+
+            name = 'IAP' if model in iapmcu else 'STC'
             name += prefix + infix + romfix + postfix
             return (name, romsize)
 
@@ -176,6 +174,7 @@ class Programmer:
 
     def recv(self, timeout = 1, start = [0x46, 0xB9, 0x68]):
         timeout += time.time()
+
         while time.time() < timeout:
             try:
                 if self.__conn_read(len(start)) == start:
@@ -183,7 +182,7 @@ class Programmer:
             except IOError:
                 continue
         else:
-            logging.debug('recv(..): timeout'); 
+            logging.debug("recv(..): Timeout");
             raise IOError()
 
         chksum = start[-1]
@@ -191,23 +190,23 @@ class Programmer:
         s = self.__conn_read(2)
         n = s[0] * 256 + s[1]
         if n > 64:
-            logging.debug('recv(..): incorrect packet size');
+            logging.debug("recv(..): Incorrect packet size");
             raise IOError()
         chksum += sum(s);
 
         s = self.__conn_read(n - 3)
         if s[n - 4] != 0x16:
-            logging.debug('recv(..): missing terminal symbol');
+            logging.debug("recv(..): Missing terminal symbol");
             raise IOError()
-        
+
         chksum += sum(s[:-(1+self.chkmode)])
         if self.chkmode > 0 and chksum & 0xFF != s[-2]:
-            logging.debug('recv(..): incorrect checksum[0]');
+            logging.debug("recv(..): Incorrect checksum[0]");
             raise IOError()
         elif self.chkmode > 1 and (chksum >> 8) & 0xFF != s[-3]:
-            logging.debug('recv(..): incorrect checksum[1]');
+            logging.debug("recv(..): Incorrect checksum[1]");
             raise IOError()
-        
+
         return (s[0], s[1:-(1+self.chkmode)])
 
     def send(self, cmd, dat):
@@ -235,12 +234,12 @@ class Programmer:
                 pass
         else:
             raise IOError()
-        
-        self.fosc = (float(sum(dat[0:16:2]) * 256 + sum(dat[1:16:2])) / 8 
+
+        self.fosc = (float(sum(dat[0:16:2]) * 256 + sum(dat[1:16:2])) / 8
                      * self.conn.baudrate / 580974)
         self.info = dat[16:]
-        self.version = '%d.%d%c' % (self.info[0] >> 4, 
-                                    self.info[0] & 0x0F, 
+        self.version = '%d.%d%c' % (self.info[0] >> 4,
+                                    self.info[0] & 0x0F,
                                     self.info[1])
         self.model = self.info[3:5]
 
@@ -263,7 +262,7 @@ class Programmer:
                                  }[self.model[0]]
             except KeyError:
                 pass
-            
+
         if self.protocol in (PROTOCOL_STC89, PROTOCOL_STC12Cx052):
             self.chkmode = 1
             self.conn.parity = serial.PARITY_NONE
@@ -276,20 +275,20 @@ class Programmer:
 
             logging.info("Protocol ID: %d" % self.protocol)
             logging.info("Checksum mode: %d" % self.chkmode)
-            logging.info("UART Parity: %s" 
+            logging.info("UART Parity: %s"
                          % {serial.PARITY_NONE: 'NONE',
                             serial.PARITY_EVEN: 'EVEN',
                             }[self.conn.parity])
 
         for i in range(0, len(self.info), 16):
-            logging.info("Info string [%d]: %s" 
-                         % (i // 16, 
+            logging.info("Info string [%d]: %s"
+                         % (i // 16,
                             ' '.join(['%02X' % j for j in self.info[i:i+16]])))
 
     def handshake(self):
         baud0 = self.conn.baudrate
 
-        for baud in [115200, 57600, 38400, 28800, 19200, 
+        for baud in [115200, 57600, 38400, 28800, 19200,
                      14400, 9600, 4800, 2400, 1200]:
 
             t = self.fosc * 1000000 / baud / 32
@@ -306,15 +305,15 @@ class Programmer:
                     continue
                 tcfg = 0xC000 + 0x100 - int(t + 0.5)
 
-            baudstr = [tcfg >> 8, 
+            baudstr = [tcfg >> 8,
                        tcfg & 0xFF,
                        0xFF - (tcfg >> 8),
                        min((256 - (tcfg & 0xFF)) * 2, 0xFE),
                        int(baud0 / 60)]
 
-            logging.info("Test baudrate %d (accuracy %0.4f) using config %s" 
-                         % (baud, 
-                            abs(round(t) - t) / t, 
+            logging.info("Test baudrate %d (accuracy %0.4f) using config %s"
+                         % (baud,
+                            abs(round(t) - t) / t,
                             ' '.join(['%02X' % i for i in baudstr])))
 
             if self.protocol == PROTOCOL_STC89:
@@ -327,7 +326,7 @@ class Programmer:
                     break
 
             logging.info("Waiting time config %02X" % (0x80 + twait))
-                
+
             self.send(0x8F, baudstr + [0x80 + twait])
 
             try:
@@ -350,7 +349,7 @@ class Programmer:
         self.send(0x8E, baudstr)
         self.__conn_baudrate(baud)
         self.baudrate = baud
-    
+
         cmd, dat = self.recv()
 
     def erase(self):
@@ -370,12 +369,11 @@ class Programmer:
             assert (self.protocol != PROTOCOL_STC12Cx052 or cmd == 0x80)
             assert (self.protocol != PROTOCOL_STC12 or cmd == 0x00)
             if dat:
-                logging.info("Serial number: " 
+                logging.info("Serial number: "
                              + ' '.join(['%02X' % j for j in dat]))
-        
+
     def flash(self, code):
-        code = [ord(i) for i in code] if sys.version_info[0] < 3 else list(code)
-        code += [0x00] * (511 - (len(code) - 1) % 512)
+        code = list(code) + [0x00] * (511 - (len(code) - 1) % 512)
 
         for i in range(0, len(code), 128):
             logging.info("Flash code region (%04X, %04X)" % (i, i + 127))
@@ -389,8 +387,8 @@ class Programmer:
 
     def terminate(self):
         logging.info("Send termination command")
-        
-        self.send(0x82, b'')
+
+        self.send(0x82, [])
         self.conn.flush()
         time.sleep(0.2)
 
@@ -401,7 +399,7 @@ def autoisp(conn, baud, magic):
 
     bak = conn.baudrate
     conn.baudrate = baud;
-    conn.write(magic);
+    conn.write(bytearray(ord(i) for i in magic));
     conn.flush()
     time.sleep(0.5)
     conn.baudrate = bak
@@ -413,21 +411,22 @@ def program(prog, code):
     prog.detect()
 
     print(" done")
-    
+
     print(" FOSC: %.3fMHz" % prog.fosc)
     print(" Model: %s (ver%s) " % (prog.name, prog.version))
     if prog.romsize is not None:
         print(" ROM: %dKB" % prog.romsize)
-    
-    # if prog.protocol == PROTOCOL_STC89:
-    #     switchs = {0x80: "Reset stops watchdog",
-    #                0x40: "Internal XRAM",
-    #                0x20: "Normal ALE pin",
-    #                0x10: "Full gain oscillator",
-    #                0x04: "Download regardless P1",
-    #                0x01: "12T mode"}
-    #     for key, desc in switchs.items():
-    #         print("[%c] %s" % ('X' if prog.info[2] & key != 0 else ' ', desc))
+
+    if prog.protocol == PROTOCOL_STC89:
+        switchs = {0x80: "Reset stops watchdog",
+                   0x40: "Internal XRAM",
+                   0x20: "Normal ALE pin",
+                   0x10: "Full gain oscillator",
+                   0x04: "Download regardless of P1",
+                   0x01: "12T mode"}
+        for key, desc in switchs.items():
+            logging.info("[%c] %s" 
+                         % ('X' if prog.info[2] & key != 0 else ' ', desc))
 
     if prog.protocol is None:
         raise IOError("Unsupported target")
@@ -487,148 +486,111 @@ def program(prog, code):
 
     # if prog.protocol == PROTOCOL_STC89:
     #     logging.info("Read configuration")
-
     #     prog.write(0x50, [])
     #     prog.read()
 
     prog.terminate()
 
+# Convert Intel HEX code to binary format
+def hex2bin(code):
+    buf = bytearray()
+    base = 0
+    line = 0
 
-def usage():
-    port = 'COM3' if sys.platform.startswith('win') else '/dev/ttyUSB0'
-    port = '/dev/tty.usbserial' if sys.platform == 'darwin' else port
+    for rec in code.splitlines():
+        # Calculate the line number of the current record
+        line += 1
 
+        try:
+            # bytes(...) is to support python<=2.6
+            # bytearray(...) is to support python<=2.7
+            n = bytearray(binascii.a2b_hex(bytes(rec[1:3])))[0]
+            dat = bytearray(binascii.a2b_hex(bytes(rec[1:n*2+11])))
+        except:
+            raise Exception("Line %d: Invalid format" % line)
+
+        if rec[0] != ord(':'):
+            raise Exception("Line %d: Missing start code ':'" % line)
+        if sum(dat) & 0xFF != 0:
+            raise Exception("Line %d: Incorrect checksum" % line)
+
+        if dat[3] == 0:      # Data record
+            addr = base + (dat[1] << 8) + dat[2]
+            # Allocate memory space and fill it with 0xFF
+            buf[len(buf):] = [0xFF] * (addr + n - len(buf))
+            # Copy data to the buffer
+            buf[addr:addr+n] = dat[4:-1]
+
+        elif dat[3] == 1:    # EOF record
+            if n != 0:
+                raise Exception("Line %d: Incorrect data length" % line)
+
+        elif dat[3] == 2:    # Extended segment address record
+            if n != 2:
+                raise Exception("Line %d: Incorrect data length" % line)
+            base = ((dat[4] << 8) + dat[5]) << 4;
+
+        elif dat[3] == 4:    # Extended linear address record
+            if n != 2:
+                raise Exception("Line %d: Incorrect data length" % line)
+            base = ((dat[4] << 8) + dat[5]) << 16;
+
+        else:
+            raise Exception("Line %d: Unsupported record type" % line)
+
+    return buf
+
+
+def usage(port, lowbaud, aispbaud):
     print("Usage: %s [OPTION]... [bin/hex file]" % sys.argv[0])
     print("""
   -p, --port       specify serial port (default: %(port)s)
-  -l, --lowbaud    specify lower baudrate (default: 2400)
+  -l, --lowbaud    specify lower baudrate (default: %(lowbaud)d)
   -r, --protocol   specify flashing procotol (default: auto)
-  -a, --aispbaud   specify the baudrate for AutoISP (default: 4800)
+  -a, --aispbaud   specify the baudrate for AutoISP (default: %(aispbaud)d)
   -m, --aispmagic  specify the magic word to restart to ISP mode
   -v, --verbose    be verbose
   -d, --debug      print debug message
   -h, --help       give this help list
-""" % {'port': port})
-  
-# Convert hex to bin format
-def hex2bin(hexData):
-    try:
-        output = cStringIO.StringIO()
-        highAddr = 0
-        line = 0
-        for src in hexData.replace("\r",'').split("\n"):
-            line += 1
-            if len(src) < 11 or src[0] != ':': 
-                raise Exception('Invalid format at line %d' % line)
-
-            # Get length of the data
-            dataLen = int(src[1:3], 16)
-            checksum = dataLen
-
-            # Get address of the data
-            dataAddr = int(src[3:7], 16)
-            checksum += (dataAddr>>8) + (dataAddr & 0xFF)
-
-            # Get data type
-            dataType = int(src[7:9], 16)
-            checksum += dataType
-
-            if dataType == 0:      # Data record
-                dst = ''
-                for i in range(0, dataLen):
-                    t = int(src[9+2*i:9+2*i+2], 16)
-                    checksum += t
-                    dst += chr(t)
-
-                # Checksum
-                checksum += int(src[-2:], 16)
-                if checksum & 0xFF == 0:
-                    output.seek(highAddr + dataAddr)
-                    output.write(dst)
-                else:
-                    raise Exception('Wrong checksum at line %d' % line)
-
-            elif dataType == 1:    # EOF record
-                if dataAddr != 0: raise Exception('Wrong data at line %d' % line)
-
-                checksum += int(src[-2:], 16)
-                if checksum & 0xFF == 0:
-                    break
-                else:
-                    raise Exception('Wrong checksum at line %d' % line)
-
-            elif dataType == 2:    # Extended segment address record
-                if dataAddr != 0: raise Exception('Invalid data at line %d' % line)
-
-                dataAddr = int(src[9:13], 16)
-                checksum += (dataAddr>>8) + (dataAddr & 0xFF)
-
-                checksum += int(src[-2:], 16)
-                if checksum & 0xFF == 0:
-                    highAddr = dataAddr << 2;
-                else:
-                    raise Exception('Wrong checksum at line %d' % line)
-
-            elif dataType == 4:    # Extended linear address record
-                if dataAddr != 0: raise Exception('Invalid data at line %d' % line)
-
-                dataAddr = int(src[9:13], 16)
-                checksum += (dataAddr>>8) + (dataAddr & 0xFF)
-
-                checksum += int(src[-2:], 16)
-                if checksum & 0xFF == 0:
-                    highAddr = dataAddr << 16;
-                else:
-                    raise Exception('Wrong checksum at line %d' % line)
-
-            else:
-                raise Exception('Wrong datatype at line %d' % line)
-
-        code = output.getvalue()
-
-    except Exception, e:
-        print 'hex2bin Error:', e
-        code = -1
-
-    finally:
-        output.close()
-
-    return code
-
+""" % {'port': port, 'lowbaud': lowbaud, 'aispbaud': aispbaud})
 
 def main():
-    port = 'COM3' if sys.platform.startswith('win') else '/dev/ttyUSB0'
-    port = '/dev/tty.usbserial' if sys.platform == 'darwin' else port
+    if sys.platform == 'win32':
+        port = 'COM3'
+    elif sys.platform == 'darwin':
+        port = '/dev/tty.usbserial'
+    else:
+        port = '/dev/ttyUSB0'
     lowbaud = 2400
     loglevel = logging.CRITICAL
     code = None
     protocol = None
     aispbaud = 4800
     aispmagic = None
-    
+
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 
-                                   "vdhp:l:r:a:m:", 
-                                   ["verbose", 
-                                    "debug", 
-                                    "help", 
-                                    "port=", 
-                                    "lowbaud=", 
+        opts, args = getopt.getopt(sys.argv[1:],
+                                   "vdhp:l:r:a:m:",
+                                   ["verbose",
+                                    "debug",
+                                    "help",
+                                    "port=",
+                                    "lowbaud=",
                                     "protocol=",
                                     "aispbaud=",
                                     "aispmagic="])
     except getopt.GetoptError as err:
         print(err)
-        usage()
+        usage(port, lowbaud, aispbaud)
         sys.exit(2)
-        
+
     for o, a in opts:
         if o in ('-v', '--verbose'):
             loglevel = min(loglevel, logging.INFO)
         elif o in ('-d', '--debug'):
             loglevel = min(loglevel, logging.DEBUG)
         elif o in ('-h', '--help'):
-            usage()
+            usage(port, lowbaud, aispbaud)
             sys.exit()
         elif o in ('-p', '--port'):
             port = a
@@ -656,15 +618,17 @@ def main():
 
     if len(args) > 0:
         with open(args[0], 'rb') as f:
-            code = f.read()
-            # Parse HEX file
-            if os.path.splitext(args[0])[1] in ('.hex', '.ihx'):
-                code = hex2bin(code)
-                if code == -1: sys.exit(2)
+            code = bytearray(f.read())
+
+        if os.path.splitext(args[0])[1] in ('.hex', '.ihx'):
+            code = hex2bin(code)
+            with open('testhex.bin', 'wb') as f:
+                f.write(code)
 
     print("Connect to %s at baudrate %d" % (port, lowbaud))
-    with serial.Serial(port=port, 
-                       baudrate=lowbaud, 
+
+    with serial.Serial(port=port,
+                       baudrate=lowbaud,
                        parity=serial.PARITY_NONE) as conn:
         if aispmagic:
             autoisp(conn, aispbaud, aispmagic)
@@ -673,4 +637,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
