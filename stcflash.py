@@ -622,8 +622,6 @@ def main():
 
         if os.path.splitext(args[0])[1] in ('.hex', '.ihx'):
             code = hex2bin(code)
-            with open('testhex.bin', 'wb') as f:
-                f.write(code)
 
     print("Connect to %s at baudrate %d" % (port, lowbaud))
 
