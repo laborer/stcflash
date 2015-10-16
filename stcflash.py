@@ -47,7 +47,7 @@ class Programmer:
         buf = bytearray()
         while len(buf) < size:
             s = bytearray(self.conn.read(size - len(buf)))
-            buf += s;
+            buf += s
 
             logging.debug("recv: " + ' '.join(['%02X' % i for i in s]))
 
@@ -182,7 +182,7 @@ class Programmer:
             except IOError:
                 continue
         else:
-            logging.debug("recv(..): Timeout");
+            logging.debug("recv(..): Timeout")
             raise IOError()
 
         chksum = start[-1]
@@ -190,21 +190,21 @@ class Programmer:
         s = self.__conn_read(2)
         n = s[0] * 256 + s[1]
         if n > 64:
-            logging.debug("recv(..): Incorrect packet size");
+            logging.debug("recv(..): Incorrect packet size")
             raise IOError()
-        chksum += sum(s);
+        chksum += sum(s)
 
         s = self.__conn_read(n - 3)
         if s[n - 4] != 0x16:
-            logging.debug("recv(..): Missing terminal symbol");
+            logging.debug("recv(..): Missing terminal symbol")
             raise IOError()
 
         chksum += sum(s[:-(1+self.chkmode)])
         if self.chkmode > 0 and chksum & 0xFF != s[-2]:
-            logging.debug("recv(..): Incorrect checksum[0]");
+            logging.debug("recv(..): Incorrect checksum[0]")
             raise IOError()
         elif self.chkmode > 1 and (chksum >> 8) & 0xFF != s[-3]:
-            logging.debug("recv(..): Incorrect checksum[1]");
+            logging.debug("recv(..): Incorrect checksum[1]")
             raise IOError()
 
         return (s[0], s[1:-(1+self.chkmode)])
@@ -398,8 +398,8 @@ def autoisp(conn, baud, magic):
         return
 
     bak = conn.baudrate
-    conn.baudrate = baud;
-    conn.write(bytearray(ord(i) for i in magic));
+    conn.baudrate = baud
+    conn.write(bytearray(ord(i) for i in magic))
     conn.flush()
     time.sleep(0.5)
     conn.baudrate = bak
@@ -425,7 +425,7 @@ def program(prog, code):
                    0x04: "Download regardless of P1",
                    0x01: "12T mode"}
         for key, desc in switchs.items():
-            logging.info("[%c] %s" 
+            logging.info("[%c] %s"
                          % ('X' if prog.info[2] & key != 0 else ' ', desc))
 
     if prog.protocol is None:
@@ -461,7 +461,7 @@ def program(prog, code):
 
     print(" done")
 
-    print("Size of the binary: %d" % len(code));
+    print("Size of the binary: %d" % len(code))
 
     # print("Programming: ", end='', flush=True)
     sys.stdout.write("Programming: ")
@@ -528,12 +528,12 @@ def hex2bin(code):
         elif dat[3] == 2:    # Extended segment address record
             if n != 2:
                 raise Exception("Line %d: Incorrect data length" % line)
-            base = ((dat[4] << 8) + dat[5]) << 4;
+            base = ((dat[4] << 8) + dat[5]) << 4
 
         elif dat[3] == 4:    # Extended linear address record
             if n != 2:
                 raise Exception("Line %d: Incorrect data length" % line)
-            base = ((dat[4] << 8) + dat[5]) << 16;
+            base = ((dat[4] << 8) + dat[5]) << 16
 
         else:
             raise Exception("Line %d: Unsupported record type" % line)
@@ -609,7 +609,7 @@ def main():
         elif o in ('-a', '--aispbaud'):
             aispbaud = int(a)
         elif o in ('-m', '--aispmagic'):
-            aispmagic = a;
+            aispmagic = a
 
     logging.basicConfig(format=('%(levelname)s: '
                                 + '[%(relativeCreated)d] '
