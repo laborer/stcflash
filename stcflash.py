@@ -23,6 +23,7 @@ import getopt
 import serial
 import os.path
 import binascii
+import math
 
 
 PROTOCOL_STC89 = 89
@@ -404,7 +405,7 @@ def autoisp(conn, baud, magic):
     time.sleep(0.5)
     conn.baudrate = bak
 
-def program(prog, code):
+def program(prog, code, erase_eeprom=None):
     sys.stdout.write("Detecting target...")
     sys.stdout.flush()
 
@@ -422,11 +423,40 @@ def program(prog, code):
                    0x40: "Internal XRAM",
                    0x20: "Normal ALE pin",
                    0x10: "Full gain oscillator",
+                   0x08: "Not erase EEPROM data",
                    0x04: "Download regardless of P1",
                    0x01: "12T mode"}
         for key, desc in switchs.items():
             logging.info("[%c] %s"
                          % ('X' if prog.info[2] & key != 0 else ' ', desc))
+
+    if prog.protocol == PROTOCOL_STC12:
+        switchs = {0x40: "Disable reset2 low level detect",
+                   0x01: "Reset pin not use as I/O port"}
+        for key, desc in switchs.items():
+            logging.info("[%c] %s"
+                         % ('X' if prog.info[6] & key != 0 else ' ', desc))
+
+        switchs2 = {0x80: "Disable long power-on-reset latency",
+                    0x40: "Oscillator high gain",
+                    0x02: "External system clock source"}
+        for key, desc in switchs2.items():
+            logging.info("[%c] %s"
+                         % ('X' if prog.info[7] & key != 0 else ' ', desc))
+
+        switchs3 = {0x20: "WDT disable after power-on-reset",
+                    0x04: "WDT count in idle mode"}
+        for key, desc in switchs3.items():
+            logging.info("[%c] %s"
+                         % ('X' if prog.info[8] & key != 0 else ' ', desc))
+
+        switchs4 = {0x02: "Not erase EEPROM data",
+                    0x01: "Download regardless of P1"}
+        for key, desc in switchs4.items():
+            logging.info("[%c] %s"
+                         % ('X' if prog.info[10] & key != 0 else ' ', desc))
+
+        logging.info("WDT prescal is %d" % math.pow(2,(prog.info[8] & 0x07) + 1))
 
     if prog.protocol is None:
         raise IOError("Unsupported target")
@@ -483,6 +513,26 @@ def program(prog, code):
         prog.send(0x69, [0x00, 0x00, 0x36, 0x01] + prog.model)
         cmd, dat = prog.recv()
         assert cmd == 0x8D and not dat
+
+    print("Setting MCU Options")
+    logging.info("Setting MCU Options")
+
+    if prog.protocol == PROTOCOL_STC89:
+        if erase_eeprom is not None:
+            prog.info[2] = prog.info[2] & 0xF7
+        else:
+            prog.info[2] = prog.info[2] | 0x08
+        prog.send(0x8D, prog.info[2] + [0xFF, 0xF4, 0xFF])
+
+
+    if prog.protocol == PROTOCOL_STC12:
+        if erase_eeprom is not None:
+            prog.info[10] = prog.info[10] & 0xFD
+        else:
+            prog.info[10] = prog.info[10] | 0x02
+        prog.send(0x8D, prog.info[6:9] + [0xFF, 0xFF, 0xFF, 0xFF, 0xFF] + prog.info[10:11] + [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xA9, 0x0A, 0xA6])
+
+    print("done")
 
     # if prog.protocol == PROTOCOL_STC89:
     #     logging.info("Read configuration")
@@ -551,6 +601,7 @@ def usage(port, lowbaud, aispbaud):
   -m, --aispmagic  specify the magic word to restart to ISP mode
   -v, --verbose    be verbose
   -d, --debug      print debug message
+  -e, --erase      erase eeprom data next download
   -h, --help       give this help list
 """ % {'port': port, 'lowbaud': lowbaud, 'aispbaud': aispbaud})
 
@@ -567,12 +618,14 @@ def main():
     protocol = None
     aispbaud = 4800
     aispmagic = None
+    erase_eeprom = None
 
     try:
         opts, args = getopt.getopt(sys.argv[1:],
-                                   "vdhp:l:r:a:m:",
+                                   "vdehp:l:r:a:m:",
                                    ["verbose",
                                     "debug",
+                                    "erase",
                                     "help",
                                     "port=",
                                     "lowbaud=",
@@ -589,6 +642,8 @@ def main():
             loglevel = min(loglevel, logging.INFO)
         elif o in ('-d', '--debug'):
             loglevel = min(loglevel, logging.DEBUG)
+        elif o in ('-e', '--erase'):
+            erase_eeprom = 1
         elif o in ('-h', '--help'):
             usage(port, lowbaud, aispbaud)
             sys.exit()
@@ -630,7 +685,7 @@ def main():
                        parity=serial.PARITY_NONE) as conn:
         if aispmagic:
             autoisp(conn, aispbaud, aispmagic)
-        program(Programmer(conn, protocol), code)
+        program(Programmer(conn, protocol), code, erase_eeprom)
 
 
 if __name__ == "__main__":
