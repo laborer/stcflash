@@ -430,31 +430,18 @@ def program(prog, code, erase_eeprom=None):
                          % ('X' if prog.info[2] & key != 0 else ' ', desc))
 
     if prog.protocol == PROTOCOL_STC12:
-        switchs = {0x40: "Disable reset2 low level detect",
-                   0x01: "Reset pin not use as I/O port"}
-        for key, desc in switchs.items():
+        switchs = {(6, 0x40, "Disable reset2 low level detect"),
+                   (6, 0x01, "Reset pin not use as I/O port"),
+                   (7, 0x80, "Disable long power-on-reset latency"),
+                   (7, 0x40, "Oscillator high gain"),
+                   (7, 0x02, "External system clock source"),
+                   (8, 0x20, "WDT disable after power-on-reset"),
+                   (8, 0x04, "WDT count in idle mode"),
+                   (10,0x02, "Not erase EEPROM data"),
+                   (10,0x01, "Download regardless of P1")}
+        for pos, bit, desc in switchs.items():
             logging.info("[%c] %s"
-                         % ('X' if prog.info[6] & key != 0 else ' ', desc))
-
-        switchs2 = {0x80: "Disable long power-on-reset latency",
-                    0x40: "Oscillator high gain",
-                    0x02: "External system clock source"}
-        for key, desc in switchs2.items():
-            logging.info("[%c] %s"
-                         % ('X' if prog.info[7] & key != 0 else ' ', desc))
-
-        switchs3 = {0x20: "WDT disable after power-on-reset",
-                    0x04: "WDT count in idle mode"}
-        for key, desc in switchs3.items():
-            logging.info("[%c] %s"
-                         % ('X' if prog.info[8] & key != 0 else ' ', desc))
-
-        switchs4 = {0x02: "Not erase EEPROM data",
-                    0x01: "Download regardless of P1"}
-        for key, desc in switchs4.items():
-            logging.info("[%c] %s"
-                         % ('X' if prog.info[10] & key != 0 else ' ', desc))
-
+                         % ('X' if prog.info[pos] & bit != 0 else ' ', desc))
         logging.info("WDT prescal is %d" % 2**((prog.info[8] & 0x07) + 1))
 
     if prog.protocol is None:
