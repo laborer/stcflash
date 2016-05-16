@@ -19,11 +19,11 @@
 import time
 import logging
 import sys
-import getopt
 import serial
 import os.path
 import binascii
 import struct
+import argparse
 
 
 PROTOCOL_STC89 = 89
@@ -50,7 +50,7 @@ class Programmer:
             s = bytearray(self.conn.read(size - len(buf)))
             buf += s
 
-            logging.debug("recv: " + ' '.join(['%02X' % i for i in s]))
+            logging.debug("recv: " + " ".join(["%02X" % i for i in s]))
 
             if len(s) == 0:
                 raise IOError()
@@ -58,7 +58,7 @@ class Programmer:
         return list(buf)
 
     def __conn_write(self, s):
-        logging.debug("send: " + ' '.join(['%02X' % i for i in s]))
+        logging.debug("send: " + " ".join(["%02X" % i for i in s]))
 
         self.conn.write(bytearray(s))
 
@@ -72,61 +72,61 @@ class Programmer:
         self.conn.baudrate = baud
 
     def __model_database(self, model):
-        modelmap = {0xE0: ('12', 1, {(0x00, 0x1F): ('C54', ''),
-                                     (0x60, 0x7F): ('C54', 'AD'),
-                                     (0x80, 0x9F): ('LE54', ''),
-                                     (0xE0, 0xFF): ('LE54', 'AD'),
+        modelmap = {0xE0: ("12", 1, {(0x00, 0x1F): ("C54", ""),
+                                     (0x60, 0x7F): ("C54", "AD"),
+                                     (0x80, 0x9F): ("LE54", ""),
+                                     (0xE0, 0xFF): ("LE54", "AD"),
                                      }),
-                    0xE1: ('12', 1, {(0x00, 0x1F): ('C52', ''),
-                                     (0x20, 0x3F): ('C52', 'PWM'),
-                                     (0x60, 0x7F): ('C52', 'AD'),
-                                     (0x80, 0x9F): ('LE52', ''),
-                                     (0xA0, 0xBF): ('LE52', 'PWM'),
-                                     (0xE0, 0xFF): ('LE52', 'AD'),
+                    0xE1: ("12", 1, {(0x00, 0x1F): ("C52", ""),
+                                     (0x20, 0x3F): ("C52", "PWM"),
+                                     (0x60, 0x7F): ("C52", "AD"),
+                                     (0x80, 0x9F): ("LE52", ""),
+                                     (0xA0, 0xBF): ("LE52", "PWM"),
+                                     (0xE0, 0xFF): ("LE52", "AD"),
                                      }),
-                    0xE2: ('11', 1, {(0x00, 0x1F): ('F', ''),
-                                     (0x20, 0x3F): ('F', 'E'),
-                                     (0x70, 0x7F): ('F', ''),
-                                     (0x80, 0x9F): ('L', ''),
-                                     (0xA0, 0xBF): ('L', 'E'),
-                                     (0xF0, 0xFF): ('L', ''),
+                    0xE2: ("11", 1, {(0x00, 0x1F): ("F", ""),
+                                     (0x20, 0x3F): ("F", "E"),
+                                     (0x70, 0x7F): ("F", ""),
+                                     (0x80, 0x9F): ("L", ""),
+                                     (0xA0, 0xBF): ("L", "E"),
+                                     (0xF0, 0xFF): ("L", ""),
                                      }),
-                    0xE6: ('12', 1, {(0x00, 0x1F): ('C56', ''),
-                                     (0x60, 0x7F): ('C56', 'AD'),
-                                     (0x80, 0x9F): ('LE56', ''),
-                                     (0xE0, 0xFF): ('LE56', 'AD'),
+                    0xE6: ("12", 1, {(0x00, 0x1F): ("C56", ""),
+                                     (0x60, 0x7F): ("C56", "AD"),
+                                     (0x80, 0x9F): ("LE56", ""),
+                                     (0xE0, 0xFF): ("LE56", "AD"),
                                      }),
-                    0xD1: ('12', 2, {(0x20, 0x3F): ('C5A', 'CCP'),
-                                     (0x40, 0x5F): ('C5A', 'AD'),
-                                     (0x60, 0x7F): ('C5A', 'S2'),
-                                     (0xA0, 0xBF): ('LE5A', 'CCP'),
-                                     (0xC0, 0xDF): ('LE5A', 'AD'),
-                                     (0xE0, 0xFF): ('LE5A', 'S2'),
+                    0xD1: ("12", 2, {(0x20, 0x3F): ("C5A", "CCP"),
+                                     (0x40, 0x5F): ("C5A", "AD"),
+                                     (0x60, 0x7F): ("C5A", "S2"),
+                                     (0xA0, 0xBF): ("LE5A", "CCP"),
+                                     (0xC0, 0xDF): ("LE5A", "AD"),
+                                     (0xE0, 0xFF): ("LE5A", "S2"),
                                      }),
-                    0xD2: ('10', 1, {(0x00, 0x0F): ('F', ''),
-                                     (0x60, 0x6F): ('F', 'XE'),
-                                     (0x70, 0x7F): ('F', 'X'),
-                                     (0xA0, 0xAF): ('L', ''),
-                                     (0xE0, 0xEF): ('L', 'XE'),
-                                     (0xF0, 0xFF): ('L', 'X'),
+                    0xD2: ("10", 1, {(0x00, 0x0F): ("F", ""),
+                                     (0x60, 0x6F): ("F", "XE"),
+                                     (0x70, 0x7F): ("F", "X"),
+                                     (0xA0, 0xAF): ("L", ""),
+                                     (0xE0, 0xEF): ("L", "XE"),
+                                     (0xF0, 0xFF): ("L", "X"),
                                      }),
-                    0xD3: ('11', 2, {(0x00, 0x1F): ('F', ''),
-                                     (0x40, 0x5F): ('F', 'X'),
-                                     (0x60, 0x7F): ('F', 'XE'),
-                                     (0xA0, 0xBF): ('L', ''),
-                                     (0xC0, 0xDF): ('L', 'X'),
-                                     (0xE0, 0xFF): ('L', 'XE'),
+                    0xD3: ("11", 2, {(0x00, 0x1F): ("F", ""),
+                                     (0x40, 0x5F): ("F", "X"),
+                                     (0x60, 0x7F): ("F", "XE"),
+                                     (0xA0, 0xBF): ("L", ""),
+                                     (0xC0, 0xDF): ("L", "X"),
+                                     (0xE0, 0xFF): ("L", "XE"),
                                      }),
-                    0xF0: ('89', 4, {(0x00, 0x10): ('C5', 'RC'),
-                                     (0x20, 0x30): ('C5', 'RC'),  #STC90C5xRC
+                    0xF0: ("89", 4, {(0x00, 0x10): ("C5", "RC"),
+                                     (0x20, 0x30): ("C5", "RC"),  #STC90C5xRC
                                      }),
-                    0xF1: ('89', 4, {(0x00, 0x10): ('C5', 'RD+'),
-                                     (0x20, 0x30): ('C5', 'RD+'),  #STC90C5xRD+
+                    0xF1: ("89", 4, {(0x00, 0x10): ("C5", "RD+"),
+                                     (0x20, 0x30): ("C5", "RD+"),  #STC90C5xRD+
                                      }),
-                    0xF2: ('12', 1, {(0x00, 0x0F): ('C', '052'),
-                                     (0x10, 0x1F): ('C', '052AD'),
-                                     (0x20, 0x2F): ('LE', '052'),
-                                     (0x30, 0x3F): ('LE', '052AD'),
+                    0xF2: ("12", 1, {(0x00, 0x0F): ("C", "052"),
+                                     (0x10, 0x1F): ("C", "052AD"),
+                                     (0x20, 0x2F): ("LE", "052"),
+                                     (0x30, 0x3F): ("LE", "052AD"),
                                      }),
                     }
 
@@ -142,7 +142,7 @@ class Programmer:
             prefix, romratio, fixmap = modelmap[model[0]]
 
             if model[0] in (0xF0, 0xF1) and 0x20 <= model[1] <= 0x30:
-                prefix = '90'
+                prefix = "90"
 
             for key, value in fixmap.items():
                 if key[0] <= model[1] <= key[1]:
@@ -164,9 +164,9 @@ class Programmer:
             elif model[0] in (0xF2,):
                 romfix = str(romsize)
             else:
-                romfix = '%02d' % romsize
+                romfix = "%02d" % romsize
 
-            name = 'IAP' if model in iapmcu else 'STC'
+            name = "IAP" if model in iapmcu else "STC"
             name += prefix + infix + romfix + postfix
             return (name, romsize)
 
@@ -239,7 +239,7 @@ class Programmer:
         self.fosc = (float(sum(dat[0:16:2]) * 256 + sum(dat[1:16:2])) / 8
                      * self.conn.baudrate / 580974)
         self.info = dat[16:]
-        self.version = '%d.%d%c' % (self.info[0] >> 4,
+        self.version = "%d.%d%c" % (self.info[0] >> 4,
                                     self.info[0] & 0x0F,
                                     self.info[1])
         self.model = self.info[3:5]
@@ -277,14 +277,14 @@ class Programmer:
             logging.info("Protocol ID: %d" % self.protocol)
             logging.info("Checksum mode: %d" % self.chkmode)
             logging.info("UART Parity: %s"
-                         % {serial.PARITY_NONE: 'NONE',
-                            serial.PARITY_EVEN: 'EVEN',
+                         % {serial.PARITY_NONE: "NONE",
+                            serial.PARITY_EVEN: "EVEN",
                             }[self.conn.parity])
 
         for i in range(0, len(self.info), 16):
             logging.info("Info string [%d]: %s"
                          % (i // 16,
-                            ' '.join(['%02X' % j for j in self.info[i:i+16]])))
+                            " ".join(["%02X" % j for j in self.info[i:i+16]])))
 
     def print_info(self):
         print(" FOSC: %.3fMHz" % self.fosc)
@@ -297,7 +297,7 @@ class Programmer:
                         ( 2, 0x40, "Internal XRAM"),
                         ( 2, 0x20, "Normal ALE pin"),
                         ( 2, 0x10, "Full gain oscillator"),
-                        ( 2, 0x08, "Not erase EEPROM data"),
+                        ( 2, 0x08, "Not erase data EEPROM"),
                         ( 2, 0x04, "Download regardless of P1"),
                         ( 2, 0x01, "12T mode")]
         elif self.protocol == PROTOCOL_STC12:
@@ -308,14 +308,14 @@ class Programmer:
                         ( 7, 0x02, "External system clock source"),
                         ( 8, 0x20, "WDT disable after power-on-reset"),
                         ( 8, 0x04, "WDT count in idle mode"),
-                        (10, 0x02, "Not erase EEPROM data"),
+                        (10, 0x02, "Not erase data EEPROM"),
                         (10, 0x01, "Download regardless of P1")]
             print(" WDT prescal: %d" % 2**((self.info[8] & 0x07) + 1))
         else:
             switches = {}
 
         for pos, bit, desc in switches:
-            print(" [%c] %s" % ('X' if self.info[pos] & bit else ' ', desc))
+            print(" [%c] %s" % ("X" if self.info[pos] & bit else " ", desc))
 
     def handshake(self):
         baud0 = self.conn.baudrate
@@ -346,7 +346,7 @@ class Programmer:
             logging.info("Test baudrate %d (accuracy %0.4f) using config %s"
                          % (baud,
                             abs(round(t) - t) / t,
-                            ' '.join(['%02X' % i for i in baudstr])))
+                            " ".join(["%02X" % i for i in baudstr])))
 
             if self.protocol == PROTOCOL_STC89:
                 freqlist = (40, 20, 10, 5)
@@ -400,7 +400,7 @@ class Programmer:
             assert (self.protocol != PROTOCOL_STC12 or cmd == 0x00)
             if dat:
                 logging.info("Serial number: "
-                             + ' '.join(['%02X' % j for j in dat]))
+                             + " ".join(["%02X" % j for j in dat]))
 
     def flash(self, code):
         code = list(code) + [0x00] * (511 - (len(code) - 1) % 512)
@@ -416,16 +416,18 @@ class Programmer:
             yield (i + 128.0) / len(code)
 
     def options(self, **kwargs):
-        erase_eeprom = kwargs.get('erase_eeprom', False)
+        erase_eeprom = kwargs.get("erase_eeprom", None)
 
         dat = []
         if self.protocol == PROTOCOL_STC89:
-            self.info[2] &= 0xF7
-            self.info[2] |= 0x00 if erase_eeprom else 0x08
+            if erase_eeprom is not None:
+                self.info[2] &= 0xF7
+                self.info[2] |= 0x00 if erase_eeprom else 0x08
             dat = [self.info[2], 0xFF, 0xFF, 0xFF]
         elif self.protocol == PROTOCOL_STC12:
-            self.info[10] &= 0xFD
-            self.info[10] |= 0x00 if erase_eeprom else 0x02
+            if erase_eeprom is not None:
+                self.info[10] &= 0xFD
+                self.info[10] |= 0x00 if erase_eeprom else 0x02
             dat = [self.info[6], self.info[7], self.info[8],
                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                    self.info[10],
@@ -435,7 +437,6 @@ class Programmer:
         if dat:
             self.send(0x8D, dat)
             cmd, dat = self.recv()
-            print(cmd, dat)
 
     def terminate(self):
         logging.info("Send termination command")
@@ -476,7 +477,7 @@ def autoisp(conn, baud, magic):
     conn.baudrate = bak
 
 
-def program(prog, code, erase_eeprom=False):
+def program(prog, code, erase_eeprom=None):
     sys.stdout.write("Detecting target...")
     sys.stdout.flush()
 
@@ -514,15 +515,14 @@ def program(prog, code, erase_eeprom=False):
 
     print("Size of the binary: %d" % len(code))
 
-    # print("Programming: ", end='', flush=True)
+    # print("Programming: ", end="", flush=True)
     sys.stdout.write("Programming: ")
     sys.stdout.flush()
 
     oldbar = 0
     for progress in prog.flash(code):
         bar = int(progress * 20)
-        # print('#' * (bar - oldbar), end='', flush=True)
-        sys.stdout.write('#' * (bar - oldbar))
+        sys.stdout.write("#" * (bar - oldbar))
         sys.stdout.flush()
         oldbar = bar
 
@@ -534,7 +534,7 @@ def program(prog, code, erase_eeprom=False):
     sys.stdout.write("Setting options...")
     sys.stdout.flush()
 
-    prog.options(erase_eeprom = erase_eeprom);
+    prog.options(erase_eeprom=erase_eeprom);
 
     print(" done")
 
@@ -559,8 +559,8 @@ def hex2bin(code):
         except:
             raise Exception("Line %d: Invalid format" % line)
 
-        if rec[0] != ord(':'):
-            raise Exception("Line %d: Missing start code ':'" % line)
+        if rec[0] != ord(":"):
+            raise Exception("Line %d: Missing start code \":\"" % line)
         if sum(dat) & 0xFF != 0:
             raise Exception("Line %d: Incorrect checksum" % line)
 
@@ -591,102 +591,84 @@ def hex2bin(code):
     return buf
 
 
-def usage(port, lowbaud, aispbaud):
-    print("Usage: %s [OPTION]... [bin/hex file]" % sys.argv[0])
-    print("""
-  -p, --port       specify serial port (default: %(port)s)
-  -l, --lowbaud    specify lower baudrate (default: %(lowbaud)d)
-  -r, --protocol   specify flashing procotol (default: auto)
-  -a, --aispbaud   specify the baudrate for AutoISP (default: %(aispbaud)d)
-  -m, --aispmagic  specify the magic word to restart to ISP mode
-  -v, --verbose    be verbose
-  -d, --debug      print debug message
-  -e, --erase      erase eeprom data next download
-  -h, --help       give this help list
-""" % {'port': port, 'lowbaud': lowbaud, 'aispbaud': aispbaud})
-
 def main():
-    if sys.platform == 'win32':
-        port = 'COM3'
-    elif sys.platform == 'darwin':
-        port = '/dev/tty.usbserial'
+    if sys.platform == "win32":
+        port = "COM3"
+    elif sys.platform == "darwin":
+        port = "/dev/tty.usbserial"
     else:
-        port = '/dev/ttyUSB0'
+        port = "/dev/ttyUSB0"
 
-    lowbaud = 2400
-    loglevel = logging.CRITICAL
-    code = None
-    protocol = None
-    aispbaud = 4800
-    aispmagic = None
-    erase_eeprom = False
+    parser = argparse.ArgumentParser(
+        description=("Stcflash, a command line programmer for "
+                     + "STC 8051 microcontroller.\n"
+                     + "https://github.com/laborer/stcflash"))
+    parser.add_argument("image",
+                        help="code image (bin/hex)",
+                        type=argparse.FileType("rb"), nargs='?')
+    parser.add_argument("-p", "--port",
+                        help="serial port device (default: %s)" % port,
+                        default=port)
+    parser.add_argument("-l", "--lowbaud",
+                        help="initial baud rate (default: 2400)",
+                        type=int,
+                        default=2400)
+    parser.add_argument("-r", "--protocol",
+                        help="protocol to use for programming",
+                        choices=["89", "12", "12cx052", "auto"],
+                        default="auto")
+    parser.add_argument("-a", "--aispbaud",
+                        help="baud rate for AutoISP (default: 4800)",
+                        type=int,
+                        default=4800)
+    parser.add_argument("-m", "--aispmagic",
+                        help="magic word for AutoISP")
+    parser.add_argument("-v", "--verbose",
+                        help="be verbose",
+                        default=0,
+                        action="count")
+    parser.add_argument("-e", "--erase_eeprom",
+                        help="erase data eeprom during next download",
+                        action="store_true")
+    parser.add_argument("-ne", "--not_erase_eeprom",
+                        help="do not erase data eeprom next download",
+                        action="store_true")
 
-    try:
-        opts, args = getopt.getopt(sys.argv[1:],
-                                   "vdehp:l:r:a:m:",
-                                   ["verbose",
-                                    "debug",
-                                    "erase",
-                                    "help",
-                                    "port=",
-                                    "lowbaud=",
-                                    "protocol=",
-                                    "aispbaud=",
-                                    "aispmagic="])
-    except getopt.GetoptError as err:
-        print(err)
-        usage(port, lowbaud, aispbaud)
-        sys.exit(2)
+    opts = parser.parse_args()
 
-    for o, a in opts:
-        if o in ('-v', '--verbose'):
-            loglevel = min(loglevel, logging.INFO)
-        elif o in ('-d', '--debug'):
-            loglevel = min(loglevel, logging.DEBUG)
-        elif o in ('-e', '--erase'):
-            erase_eeprom = True
-        elif o in ('-h', '--help'):
-            usage(port, lowbaud, aispbaud)
-            sys.exit()
-        elif o in ('-p', '--port'):
-            port = a
-        elif o in ('-l', '--lowbaud'):
-            lowbaud = int(a)
-        elif o in ('-r', '--protocol'):
-            try:
-                protocol = {'89': PROTOCOL_STC89,
-                            '12': PROTOCOL_STC12,
-                            '12cx052': PROTOCOL_STC12Cx052,
-                            'auto': None,
-                            }[a.lower()]
-            except:
-                print("Unknown protocol")
-                sys.exit(2)
-        elif o in ('-a', '--aispbaud'):
-            aispbaud = int(a)
-        elif o in ('-m', '--aispmagic'):
-            aispmagic = a
+    opts.loglevel = (logging.CRITICAL,
+                     logging.INFO,
+                     logging.DEBUG)[min(2, opts.verbose)]
 
-    logging.basicConfig(format=('%(levelname)s: '
-                                + '[%(relativeCreated)d] '
-                                + '%(message)s'),
-                        level=loglevel)
+    opts.protocol = {'89': PROTOCOL_STC89,
+                     '12': PROTOCOL_STC12,
+                     '12cx052': PROTOCOL_STC12Cx052,
+                     'auto': None}[opts.protocol]
 
-    if len(args) > 0:
-        with open(args[0], 'rb') as f:
-            code = bytearray(f.read())
+    if not opts.erase_eeprom and not opts.not_erase_eeprom:
+        opts.erase_eeprom = None
 
-        if os.path.splitext(args[0])[1] in ('.hex', '.ihx'):
+    logging.basicConfig(format=("%(levelname)s: "
+                                + "[%(relativeCreated)d] "
+                                + "%(message)s"),
+                        level=opts.loglevel)
+
+    if opts.image:
+        code = bytearray(opts.image.read())
+        opts.image.close()
+        if os.path.splitext(opts.image.name)[1] in (".hex", ".ihx"):
             code = hex2bin(code)
+    else:
+        code = None
 
-    print("Connect to %s at baudrate %d" % (port, lowbaud))
+    print("Connect to %s at baudrate %d" % (opts.port, opts.lowbaud))
 
-    with serial.Serial(port=port,
-                       baudrate=lowbaud,
+    with serial.Serial(port=opts.port,
+                       baudrate=opts.lowbaud,
                        parity=serial.PARITY_NONE) as conn:
-        if aispmagic:
-            autoisp(conn, aispbaud, aispmagic)
-        program(Programmer(conn, protocol), code, erase_eeprom)
+        if opts.aispmagic:
+            autoisp(conn, opts.aispbaud, opts.aispmagic)
+        program(Programmer(conn, opts.protocol), code, opts.erase_eeprom)
 
 
 if __name__ == "__main__":
