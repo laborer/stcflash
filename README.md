@@ -36,7 +36,7 @@ $ python stcflash.py
 Connect to /dev/ttyUSB0 at baudrate 2400
 Detecting target... done
  FOSC: 11.955MHz
- Model: STC89C52RC (ver4.3C) 
+ Model: STC89C52RC (ver4.3C)
  ROM: 8KB
 ```
 
@@ -66,7 +66,7 @@ $ python stcflash.py program.hex
 Connect to /dev/ttyUSB0 at baudrate 2400
 Detecting target... done
  FOSC: 11.955MHz
- Model: STC89C52RC (ver4.3C) 
+ Model: STC89C52RC (ver4.3C)
  ROM: 8KB
 Baudrate: 38400
 Erasing target... done
@@ -114,10 +114,13 @@ word to make this scheme work.  The following is an example,
 $ python stcflash.py --aispbaud 2400 --aispmagic 6af23Qtr program.bin
 ```
 
+You can use `-e` option to enable erasing data EEPROM during every
+programming operation and use `-ne` to disable this function.
+
 Troubleshooting
 ---------------
 
-Use `--verbose` or `--debug` to get more or MOAR runtime information.
+Use `-v` or `-vv` to get more or MOAR runtime information.
 
 If you have any questions, please feel free to contact me at
 laborer(a)126.com.
