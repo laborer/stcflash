@@ -23,6 +23,7 @@ import getopt
 import serial
 import os.path
 import binascii
+import struct
 
 
 PROTOCOL_STC89 = 89
@@ -285,6 +286,37 @@ class Programmer:
                          % (i // 16,
                             ' '.join(['%02X' % j for j in self.info[i:i+16]])))
 
+    def print_info(self):
+        print(" FOSC: %.3fMHz" % self.fosc)
+        print(" Model: %s (ver%s) " % (self.name, self.version))
+        if self.romsize is not None:
+            print(" ROM: %dKB" % self.romsize)
+
+        if self.protocol == PROTOCOL_STC89:
+            switches = [( 2, 0x80, "Reset stops watchdog"),
+                        ( 2, 0x40, "Internal XRAM"),
+                        ( 2, 0x20, "Normal ALE pin"),
+                        ( 2, 0x10, "Full gain oscillator"),
+                        ( 2, 0x08, "Not erase EEPROM data"),
+                        ( 2, 0x04, "Download regardless of P1"),
+                        ( 2, 0x01, "12T mode")]
+        elif self.protocol == PROTOCOL_STC12:
+            switches = [( 6, 0x40, "Disable reset2 low level detect"),
+                        ( 6, 0x01, "Reset pin not use as I/O port"),
+                        ( 7, 0x80, "Disable long power-on-reset latency"),
+                        ( 7, 0x40, "Oscillator high gain"),
+                        ( 7, 0x02, "External system clock source"),
+                        ( 8, 0x20, "WDT disable after power-on-reset"),
+                        ( 8, 0x04, "WDT count in idle mode"),
+                        (10, 0x02, "Not erase EEPROM data"),
+                        (10, 0x01, "Download regardless of P1")]
+            print(" WDT prescal: %d" % 2**((self.info[8] & 0x07) + 1))
+        else:
+            switches = {}
+
+        for pos, bit, desc in switches:
+            print(" [%c] %s" % ('X' if self.info[pos] & bit else ' ', desc))
+
     def handshake(self):
         baud0 = self.conn.baudrate
 
@@ -353,8 +385,6 @@ class Programmer:
         cmd, dat = self.recv()
 
     def erase(self):
-        logging.info("Erase")
-
         if self.protocol == PROTOCOL_STC89:
             self.send(0x84, [0x01, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33])
             cmd, dat = self.recv(10)
@@ -385,12 +415,53 @@ class Programmer:
 
             yield (i + 128.0) / len(code)
 
+    def options(self, **kwargs):
+        erase_eeprom = kwargs.get('erase_eeprom', False)
+
+        dat = []
+        if self.protocol == PROTOCOL_STC89:
+            self.info[2] &= 0xF7
+            self.info[2] |= 0x00 if erase_eeprom else 0x08
+            dat = [self.info[2], 0xFF, 0xFF, 0xFF]
+        elif self.protocol == PROTOCOL_STC12:
+            self.info[10] &= 0xFD
+            self.info[10] |= 0x00 if erase_eeprom else 0x02
+            dat = [self.info[6], self.info[7], self.info[8],
+                   0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                   self.info[10],
+                   0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+            dat += struct.pack(">I", int(self.fosc * 1000000))
+
+        if dat:
+            self.send(0x8D, dat)
+            cmd, dat = self.recv()
+            print(cmd, dat)
+
     def terminate(self):
         logging.info("Send termination command")
 
         self.send(0x82, [])
         self.conn.flush()
         time.sleep(0.2)
+
+    def unknown_packet_1(self):
+        logging.info("Send unknown packet (50 00 00 36 01 ...)")
+        self.send(0x50, [0x00, 0x00, 0x36, 0x01] + self.model)
+        cmd, dat = self.recv()
+        assert cmd == 0x8F and not dat
+
+    def unknown_packet_2(self):
+        for i in range(5):
+            logging.info("Send unknown packet (80 00 00 36 01 ...)")
+            self.send(0x80, [0x00, 0x00, 0x36, 0x01] + self.model)
+            cmd, dat = self.recv()
+            assert cmd == 0x80 and not dat
+
+    def unknown_packet_3(self):
+        logging.info("Send unknown packet (69 00 00 36 01 ...)")
+        self.send(0x69, [0x00, 0x00, 0x36, 0x01] + self.model)
+        cmd, dat = self.recv()
+        assert cmd == 0x8D and not dat
 
 
 def autoisp(conn, baud, magic):
@@ -404,6 +475,7 @@ def autoisp(conn, baud, magic):
     time.sleep(0.5)
     conn.baudrate = bak
 
+
 def program(prog, code, erase_eeprom=False):
     sys.stdout.write("Detecting target...")
     sys.stdout.flush()
@@ -412,37 +484,7 @@ def program(prog, code, erase_eeprom=False):
 
     print(" done")
 
-    print(" FOSC: %.3fMHz" % prog.fosc)
-    print(" Model: %s (ver%s) " % (prog.name, prog.version))
-    if prog.romsize is not None:
-        print(" ROM: %dKB" % prog.romsize)
-
-    if prog.protocol == PROTOCOL_STC89:
-        switchs = {0x80: "Reset stops watchdog",
-                   0x40: "Internal XRAM",
-                   0x20: "Normal ALE pin",
-                   0x10: "Full gain oscillator",
-                   0x08: "Not erase EEPROM data",
-                   0x04: "Download regardless of P1",
-                   0x01: "12T mode"}
-        for key, desc in switchs.items():
-            logging.info("[%c] %s"
-                         % ('X' if prog.info[2] & key != 0 else ' ', desc))
-
-    if prog.protocol == PROTOCOL_STC12:
-        switchs = {(6, 0x40, "Disable reset2 low level detect"),
-                   (6, 0x01, "Reset pin not use as I/O port"),
-                   (7, 0x80, "Disable long power-on-reset latency"),
-                   (7, 0x40, "Oscillator high gain"),
-                   (7, 0x02, "External system clock source"),
-                   (8, 0x20, "WDT disable after power-on-reset"),
-                   (8, 0x04, "WDT count in idle mode"),
-                   (10,0x02, "Not erase EEPROM data"),
-                   (10,0x01, "Download regardless of P1")}
-        for pos, bit, desc in switchs:
-            logging.info("[%c] %s"
-                         % ('X' if prog.info[pos] & bit != 0 else ' ', desc))
-        logging.info("WDT prescal is %d" % 2**((prog.info[8] & 0x07) + 1))
+    prog.print_info()
 
     if prog.protocol is None:
         raise IOError("Unsupported target")
@@ -451,9 +493,7 @@ def program(prog, code, erase_eeprom=False):
         return
 
     if prog.protocol == PROTOCOL_STC12:
-        prog.send(0x50, [0x00, 0x00, 0x36, 0x01] + prog.model)
-        cmd, dat = prog.recv()
-        assert cmd == 0x8F and not dat
+        prog.unknown_packet_1()
 
     sys.stdout.write("Baudrate: ")
     sys.stdout.flush()
@@ -463,12 +503,7 @@ def program(prog, code, erase_eeprom=False):
     print(prog.baudrate)
 
     if prog.protocol in (PROTOCOL_STC89, PROTOCOL_STC12Cx052):
-        for i in range(5):
-            logging.info("Send unknown packet (80 00 00 36 01 ...)")
-
-            prog.send(0x80, [0x00, 0x00, 0x36, 0x01] + prog.model)
-            cmd, dat = prog.recv()
-            assert cmd == 0x80 and not dat
+        prog.unknown_packet_2()
 
     sys.stdout.write("Erasing target...")
     sys.stdout.flush()
@@ -494,38 +529,17 @@ def program(prog, code, erase_eeprom=False):
     print(" done")
 
     if prog.protocol == PROTOCOL_STC12:
-        logging.info("Send unknown packet (80 00 00 36 01 ...)")
+        prog.unknown_packet_3()
 
-        prog.send(0x69, [0x00, 0x00, 0x36, 0x01] + prog.model)
-        cmd, dat = prog.recv()
-        assert cmd == 0x8D and not dat
+    sys.stdout.write("Setting options...")
+    sys.stdout.flush()
 
-    print("Setting MCU Options")
-    logging.info("Setting MCU Options")
+    prog.options(erase_eeprom = erase_eeprom);
 
-    if prog.protocol == PROTOCOL_STC89:
-        if erase_eeprom is True:
-            prog.info[2] = prog.info[2] & 0xF7
-        else:
-            prog.info[2] = prog.info[2] | 0x08
-        prog.send(0x8D, prog.info[2] + [0xFF, 0xF4, 0xFF])
-
-
-    if prog.protocol == PROTOCOL_STC12:
-        if erase_eeprom is True:
-            prog.info[10] = prog.info[10] & 0xFD
-        else:
-            prog.info[10] = prog.info[10] | 0x02
-        prog.send(0x8D, prog.info[6:9] + [0xFF, 0xFF, 0xFF, 0xFF, 0xFF] + prog.info[10:11] + [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xA9, 0x0A, 0xA6])
-
-    print("done")
-
-    # if prog.protocol == PROTOCOL_STC89:
-    #     logging.info("Read configuration")
-    #     prog.write(0x50, [])
-    #     prog.read()
+    print(" done")
 
     prog.terminate()
+
 
 # Convert Intel HEX code to binary format
 def hex2bin(code):
@@ -598,6 +612,7 @@ def main():
         port = '/dev/tty.usbserial'
     else:
         port = '/dev/ttyUSB0'
+
     lowbaud = 2400
     loglevel = logging.CRITICAL
     code = None
