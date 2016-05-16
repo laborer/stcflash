@@ -439,7 +439,7 @@ def program(prog, code, erase_eeprom=None):
                    (8, 0x04, "WDT count in idle mode"),
                    (10,0x02, "Not erase EEPROM data"),
                    (10,0x01, "Download regardless of P1")}
-        for pos, bit, desc in switchs.items():
+        for pos, bit, desc in switchs:
             logging.info("[%c] %s"
                          % ('X' if prog.info[pos] & bit != 0 else ' ', desc))
         logging.info("WDT prescal is %d" % 2**((prog.info[8] & 0x07) + 1))
