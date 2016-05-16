@@ -23,7 +23,6 @@ import getopt
 import serial
 import os.path
 import binascii
-import math
 
 
 PROTOCOL_STC89 = 89
@@ -456,7 +455,7 @@ def program(prog, code, erase_eeprom=None):
             logging.info("[%c] %s"
                          % ('X' if prog.info[10] & key != 0 else ' ', desc))
 
-        logging.info("WDT prescal is %d" % math.pow(2,(prog.info[8] & 0x07) + 1))
+        logging.info("WDT prescal is %d" % 2**((prog.info[8] & 0x07) + 1))
 
     if prog.protocol is None:
         raise IOError("Unsupported target")
