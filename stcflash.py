@@ -404,7 +404,7 @@ def autoisp(conn, baud, magic):
     time.sleep(0.5)
     conn.baudrate = bak
 
-def program(prog, code, erase_eeprom=None):
+def program(prog, code, erase_eeprom=False):
     sys.stdout.write("Detecting target...")
     sys.stdout.flush()
 
@@ -504,7 +504,7 @@ def program(prog, code, erase_eeprom=None):
     logging.info("Setting MCU Options")
 
     if prog.protocol == PROTOCOL_STC89:
-        if erase_eeprom is not None:
+        if erase_eeprom is True:
             prog.info[2] = prog.info[2] & 0xF7
         else:
             prog.info[2] = prog.info[2] | 0x08
@@ -512,7 +512,7 @@ def program(prog, code, erase_eeprom=None):
 
 
     if prog.protocol == PROTOCOL_STC12:
-        if erase_eeprom is not None:
+        if erase_eeprom is True:
             prog.info[10] = prog.info[10] & 0xFD
         else:
             prog.info[10] = prog.info[10] | 0x02
@@ -604,7 +604,7 @@ def main():
     protocol = None
     aispbaud = 4800
     aispmagic = None
-    erase_eeprom = None
+    erase_eeprom = False
 
     try:
         opts, args = getopt.getopt(sys.argv[1:],
@@ -629,7 +629,7 @@ def main():
         elif o in ('-d', '--debug'):
             loglevel = min(loglevel, logging.DEBUG)
         elif o in ('-e', '--erase'):
-            erase_eeprom = 1
+            erase_eeprom = True
         elif o in ('-h', '--help'):
             usage(port, lowbaud, aispbaud)
             sys.exit()
