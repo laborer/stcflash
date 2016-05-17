@@ -300,7 +300,8 @@ class Programmer:
                         ( 2, 0x08, "Not erase data EEPROM"),
                         ( 2, 0x04, "Download regardless of P1"),
                         ( 2, 0x01, "12T mode")]
-        elif self.protocol == PROTOCOL_STC12:
+        elif (self.protocol == PROTOCOL_STC12
+              and self.model[0] in (0xD1, 0xD2, 0xD3, 0xE2)):
             switches = [( 6, 0x40, "Disable reset2 low level detect"),
                         ( 6, 0x01, "Reset pin not use as I/O port"),
                         ( 7, 0x80, "Disable long power-on-reset latency"),
@@ -312,7 +313,7 @@ class Programmer:
                         (10, 0x01, "Download regardless of P1")]
             print(" WDT prescal: %d" % 2**((self.info[8] & 0x07) + 1))
         else:
-            switches = {}
+            switches = []
 
         for pos, bit, desc in switches:
             print(" [%c] %s" % ("X" if self.info[pos] & bit else " ", desc))
@@ -424,7 +425,8 @@ class Programmer:
                 self.info[2] &= 0xF7
                 self.info[2] |= 0x00 if erase_eeprom else 0x08
             dat = [self.info[2], 0xFF, 0xFF, 0xFF]
-        elif self.protocol == PROTOCOL_STC12:
+        elif (self.protocol == PROTOCOL_STC12
+              and self.model[0] in (0xD1, 0xD2, 0xD3, 0xE2)):
             if erase_eeprom is not None:
                 self.info[10] &= 0xFD
                 self.info[10] |= 0x00 if erase_eeprom else 0x02
@@ -433,10 +435,15 @@ class Programmer:
                    self.info[10],
                    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
             dat += struct.pack(">I", int(self.fosc * 1000000))
+        elif erase_eeprom is not None:
+            logging.info("Modifying options is not supported for this target")
+            return False
 
         if dat:
             self.send(0x8D, dat)
             cmd, dat = self.recv()
+
+        return True
 
     def terminate(self):
         logging.info("Send termination command")
@@ -534,9 +541,10 @@ def program(prog, code, erase_eeprom=None):
     sys.stdout.write("Setting options...")
     sys.stdout.flush()
 
-    prog.options(erase_eeprom=erase_eeprom);
-
-    print(" done")
+    if prog.options(erase_eeprom=erase_eeprom):
+        print(" done")
+    else:
+        print(" failed")
 
     prog.terminate()
 
@@ -628,10 +636,12 @@ def main():
                         default=0,
                         action="count")
     parser.add_argument("-e", "--erase_eeprom",
-                        help="erase data eeprom during next download",
+                        help=("erase data eeprom during next download"
+                              +"(experimental)"),
                         action="store_true")
     parser.add_argument("-ne", "--not_erase_eeprom",
-                        help="do not erase data eeprom next download",
+                        help=("do not erase data eeprom next download"
+                              +"(experimental)"),
                         action="store_true")
 
     opts = parser.parse_args()
