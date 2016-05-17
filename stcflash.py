@@ -318,7 +318,7 @@ class Programmer:
                         (10, 0x01, "Download regardless of P1")]
             print(" WDT prescal: %d" % 2**((self.info[8] & 0x07) + 1))
 
-        elif self.protocol == PROTOCOL_12C52:
+        elif self.protocol in [PROTOCOL_12C52, PROTOCOL_12Cx052]:
             switches = [(8, 0x02, "Not erase data EEPROM")]
 
         else:
@@ -442,7 +442,7 @@ class Programmer:
             dat = (self.info[6:9] + [0xFF]*5 + self.info[10:11]
                    + [0xFF]*6 + fosc)
 
-        elif self.protocol == PROTOCOL_12C52:
+        elif self.protocol in [PROTOCOL_12C52, PROTOCOL_12Cx052]:
             if erase_eeprom is not None:
                 self.info[8] &= 0xFD
                 self.info[8] |= 0x00 if erase_eeprom else 0x02
