@@ -26,9 +26,14 @@ import struct
 import argparse
 
 
-PROTOCOL_STC89 = 89
-PROTOCOL_STC12 = 12
-PROTOCOL_STC12Cx052 = 12.1052
+PROTOCOL_89 = "89"
+PROTOCOL_12C5A = "12c5a"
+PROTOCOL_12C52 = "12c52"
+PROTOCOL_12Cx052 = "12cx052"
+
+PROTOSET_89 = [PROTOCOL_89]
+PROTOSET_12 = [PROTOCOL_12C5A, PROTOCOL_12C52, PROTOCOL_12Cx052]
+PROTOSET_PARITY = [PROTOCOL_12C5A, PROTOCOL_12C52]
 
 
 class Programmer:
@@ -37,10 +42,10 @@ class Programmer:
         self.protocol = protocol
 
         self.conn.timeout = 0.05
-        if self.protocol in (PROTOCOL_STC89, PROTOCOL_STC12Cx052, None):
-            self.conn.parity = serial.PARITY_NONE
-        else:
+        if self.protocol in PROTOSET_PARITY:
             self.conn.parity = serial.PARITY_EVEN
+        else:
+            self.conn.parity = serial.PARITY_NONE
 
         self.chkmode = 0
 
@@ -252,29 +257,29 @@ class Programmer:
 
         if self.protocol is None:
             try:
-                self.protocol = {0xF0: PROTOCOL_STC89,       #STC89/90C5xRC
-                                 0xF1: PROTOCOL_STC89,       #STC89/90C5xRD+
-                                 0xF2: PROTOCOL_STC12Cx052,  #STC12Cx052
-                                 0xD1: PROTOCOL_STC12,       #STC12C5Ax
-                                 0xD2: PROTOCOL_STC12,       #STC10Fx
-                                 0xE1: PROTOCOL_STC12,       #STC12C52x
-                                 0xE2: PROTOCOL_STC12,       #STC11Fx
-                                 0xE6: PROTOCOL_STC12,       #STC12C56x
+                self.protocol = {0xF0: PROTOCOL_89,       #STC89/90C5xRC
+                                 0xF1: PROTOCOL_89,       #STC89/90C5xRD+
+                                 0xF2: PROTOCOL_12Cx052,  #STC12Cx052
+                                 0xD1: PROTOCOL_12C5A,    #STC12C5Ax
+                                 0xD2: PROTOCOL_12C5A,    #STC10Fx
+                                 0xE1: PROTOCOL_12C52,    #STC12C52x
+                                 0xE2: PROTOCOL_12C5A,    #STC11Fx
+                                 0xE6: PROTOCOL_12C52,    #STC12C56x
                                  }[self.model[0]]
             except KeyError:
                 pass
 
-        if self.protocol in (PROTOCOL_STC89, PROTOCOL_STC12Cx052):
-            self.chkmode = 1
-            self.conn.parity = serial.PARITY_NONE
-        elif self.protocol == PROTOCOL_STC12:
+        if self.protocol in PROTOSET_PARITY:
             self.chkmode = 2
             self.conn.parity = serial.PARITY_EVEN
+        else:
+            self.chkmode = 1
+            self.conn.parity = serial.PARITY_NONE
 
         if self.protocol is not None:
             del self.info[-self.chkmode:]
 
-            logging.info("Protocol ID: %d" % self.protocol)
+            logging.info("Protocol ID: %s" % self.protocol)
             logging.info("Checksum mode: %d" % self.chkmode)
             logging.info("UART Parity: %s"
                          % {serial.PARITY_NONE: "NONE",
@@ -292,7 +297,7 @@ class Programmer:
         if self.romsize is not None:
             print(" ROM: %dKB" % self.romsize)
 
-        if self.protocol == PROTOCOL_STC89:
+        if self.protocol == PROTOCOL_89:
             switches = [( 2, 0x80, "Reset stops watchdog"),
                         ( 2, 0x40, "Internal XRAM"),
                         ( 2, 0x20, "Normal ALE pin"),
@@ -301,8 +306,7 @@ class Programmer:
                         ( 2, 0x04, "Download regardless of P1"),
                         ( 2, 0x01, "12T mode")]
 
-        elif (self.protocol == PROTOCOL_STC12
-              and self.model[0] in (0xD1, 0xD2, 0xD3, 0xE2)):
+        elif self.protocol == PROTOCOL_12C5A:
             switches = [( 6, 0x40, "Disable reset2 low level detect"),
                         ( 6, 0x01, "Reset pin not use as I/O port"),
                         ( 7, 0x80, "Disable long power-on-reset latency"),
@@ -314,8 +318,7 @@ class Programmer:
                         (10, 0x01, "Download regardless of P1")]
             print(" WDT prescal: %d" % 2**((self.info[8] & 0x07) + 1))
 
-        elif (self.protocol == PROTOCOL_STC12
-              and self.model[0] in (0xE1, 0xE6)):
+        elif self.protocol == PROTOCOL_12C52:
             switches = [(8, 0x02, "Not erase data EEPROM")]
 
         else:
@@ -331,15 +334,15 @@ class Programmer:
                      14400, 9600, 4800, 2400, 1200]:
 
             t = self.fosc * 1000000 / baud / 32
-            if self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
+            if self.protocol not in PROTOSET_89:
                 t *= 2
 
             if abs(round(t) - t) / t > 0.03:
                 continue
 
-            if self.protocol == PROTOCOL_STC89:
+            if self.protocol in PROTOSET_89:
                 tcfg = 0x10000 - int(t + 0.5)
-            elif self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
+            else:
                 if t > 0xFF:
                     continue
                 tcfg = 0xC000 + 0x100 - int(t + 0.5)
@@ -355,9 +358,9 @@ class Programmer:
                             abs(round(t) - t) / t,
                             " ".join(["%02X" % i for i in baudstr])))
 
-            if self.protocol == PROTOCOL_STC89:
+            if self.protocol in PROTOSET_89:
                 freqlist = (40, 20, 10, 5)
-            elif self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
+            else:
                 freqlist = (30, 24, 20, 12, 6, 3, 2, 1)
 
             for twait in range(0, len(freqlist)):
@@ -392,19 +395,17 @@ class Programmer:
         cmd, dat = self.recv()
 
     def erase(self):
-        if self.protocol == PROTOCOL_STC89:
+        if self.protocol in PROTOSET_89:
             self.send(0x84, [0x01, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33])
             cmd, dat = self.recv(10)
             assert cmd == 0x80
 
-        elif self.protocol in (PROTOCOL_STC12, PROTOCOL_STC12Cx052):
+        else:
             self.send(0x84, ([0x00, 0x00, self.romsize * 4,
                               0x00, 0x00, self.romsize * 4]
                              + [0x00] * 12
                              + [i for i in range(0x80, 0x0D, -1)]))
             cmd, dat = self.recv(10)
-            assert (self.protocol != PROTOCOL_STC12Cx052 or cmd == 0x80)
-            assert (self.protocol != PROTOCOL_STC12 or cmd == 0x00)
             if dat:
                 logging.info("Serial number: "
                              + " ".join(["%02X" % j for j in dat]))
@@ -428,29 +429,25 @@ class Programmer:
         dat = []
         fosc = list(struct.pack(">I", int(self.fosc * 1000000)))
 
-        if self.protocol == PROTOCOL_STC89:
+        if self.protocol == PROTOCOL_89:
             if erase_eeprom is not None:
                 self.info[2] &= 0xF7
                 self.info[2] |= 0x00 if erase_eeprom else 0x08
             dat = self.info[2:3] + [0xFF]*3
 
-        elif (self.protocol == PROTOCOL_STC12
-              and self.model[0] in (0xD1, 0xD2, 0xD3, 0xE2)):
+        elif self.protocol == PROTOCOL_12C5A:
             if erase_eeprom is not None:
                 self.info[10] &= 0xFD
                 self.info[10] |= 0x00 if erase_eeprom else 0x02
             dat = (self.info[6:9] + [0xFF]*5 + self.info[10:11]
                    + [0xFF]*6 + fosc)
 
-        elif (self.protocol == PROTOCOL_STC12
-              and self.model[0] in (0xE1, 0xE6)):
+        elif self.protocol == PROTOCOL_12C52:
             if erase_eeprom is not None:
                 self.info[8] &= 0xFD
                 self.info[8] |= 0x00 if erase_eeprom else 0x02
             dat = (self.info[6:11] + fosc + self.info[12:16] + [0xFF]*4
                    + self.info[8:9] + [0xFF]*7 + fosc + [0xFF]*3)
-            # print(" ".join("%02X" % i for i in dat))
-            # return True
 
         elif erase_eeprom is not None:
             logging.info("Modifying options is not supported for this target")
@@ -470,23 +467,26 @@ class Programmer:
         time.sleep(0.2)
 
     def unknown_packet_1(self):
-        logging.info("Send unknown packet (50 00 00 36 01 ...)")
-        self.send(0x50, [0x00, 0x00, 0x36, 0x01] + self.model)
-        cmd, dat = self.recv()
-        assert cmd == 0x8F and not dat
+        if self.protocol in PROTOSET_PARITY:
+            logging.info("Send unknown packet (50 00 00 36 01 ...)")
+            self.send(0x50, [0x00, 0x00, 0x36, 0x01] + self.model)
+            cmd, dat = self.recv()
+            assert cmd == 0x8F and not dat
 
     def unknown_packet_2(self):
-        for i in range(5):
-            logging.info("Send unknown packet (80 00 00 36 01 ...)")
-            self.send(0x80, [0x00, 0x00, 0x36, 0x01] + self.model)
-            cmd, dat = self.recv()
-            assert cmd == 0x80 and not dat
+        if self.protocol not in PROTOSET_PARITY:
+            for i in range(5):
+                logging.info("Send unknown packet (80 00 00 36 01 ...)")
+                self.send(0x80, [0x00, 0x00, 0x36, 0x01] + self.model)
+                cmd, dat = self.recv()
+                assert cmd == 0x80 and not dat
 
     def unknown_packet_3(self):
-        logging.info("Send unknown packet (69 00 00 36 01 ...)")
-        self.send(0x69, [0x00, 0x00, 0x36, 0x01] + self.model)
-        cmd, dat = self.recv()
-        assert cmd == 0x8D and not dat
+        if self.protocol in PROTOSET_PARITY:
+            logging.info("Send unknown packet (69 00 00 36 01 ...)")
+            self.send(0x69, [0x00, 0x00, 0x36, 0x01] + self.model)
+            cmd, dat = self.recv()
+            assert cmd == 0x8D and not dat
 
 
 def autoisp(conn, baud, magic):
@@ -517,8 +517,7 @@ def program(prog, code, erase_eeprom=None):
     if code is None:
         return
 
-    if prog.protocol == PROTOCOL_STC12:
-        prog.unknown_packet_1()
+    prog.unknown_packet_1()
 
     sys.stdout.write("Baudrate: ")
     sys.stdout.flush()
@@ -527,8 +526,7 @@ def program(prog, code, erase_eeprom=None):
 
     print(prog.baudrate)
 
-    if prog.protocol in (PROTOCOL_STC89, PROTOCOL_STC12Cx052):
-        prog.unknown_packet_2()
+    prog.unknown_packet_2()
 
     sys.stdout.write("Erasing target...")
     sys.stdout.flush()
@@ -552,8 +550,7 @@ def program(prog, code, erase_eeprom=None):
 
     print(" done")
 
-    if prog.protocol == PROTOCOL_STC12:
-        prog.unknown_packet_3()
+    prog.unknown_packet_3()
 
     sys.stdout.write("Setting options...")
     sys.stdout.flush()
@@ -640,7 +637,7 @@ def main():
                         default=2400)
     parser.add_argument("-r", "--protocol",
                         help="protocol to use for programming",
-                        choices=["89", "12", "12cx052", "auto"],
+                        choices=["89", "12c5a", "12c52", "12cx052", "auto"],
                         default="auto")
     parser.add_argument("-a", "--aispbaud",
                         help="baud rate for AutoISP (default: 4800)",
@@ -667,9 +664,10 @@ def main():
                      logging.INFO,
                      logging.DEBUG)[min(2, opts.verbose)]
 
-    opts.protocol = {'89': PROTOCOL_STC89,
-                     '12': PROTOCOL_STC12,
-                     '12cx052': PROTOCOL_STC12Cx052,
+    opts.protocol = {'89': PROTOCOL_89,
+                     '12c5a': PROTOCOL_12C5A,
+                     '12c52': PROTOCOL_12C52,
+                     '12cx052': PROTOCOL_12Cx052,
                      'auto': None}[opts.protocol]
 
     if not opts.erase_eeprom and not opts.not_erase_eeprom:

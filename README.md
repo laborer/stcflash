@@ -89,19 +89,15 @@ protocol as STC89C5xRC series, then you can program it as follows,
 $ python stcflash.py --protocol 89 program.bin
 ```
 
-If its protocol is compatible with STC12C5Axx series, then use the
-following command instead,
+The following is a table of protocols and corresponding MCUs that have
+been tested working with each protocol.
 
-```
-$ python stcflash.py --protocol 12 program.bin
-```
-
-If its protocol is compatible with STC12Cx052x series, then use the
-following command instead,
-
-```
-$ python stcflash.py --protocol 12Cx052 program.bin
-```
+Protocol | MCUs
+---------|---------------------
+89       | STC89C52RC (v4.3C), STC89C54RD+ (v4.3C), STC90C52RC (v4.3C)
+12cx052  | STC12C2052 (v5.8D)
+12c52    | STC12C5608AD (v6.0G), STC12C5204AD (v6.0H)
+12c5a    | STC10F04XE (v6.5J), STC12C5A16S2 (v6.2I),  STC11F02E (v6.5K)
 
 Before connecting to a microcontroller using one of the ISP protocols,
 stcflash can send a magic word first at a given baudrate to ask the
