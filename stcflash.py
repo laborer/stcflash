@@ -300,6 +300,7 @@ class Programmer:
                         ( 2, 0x08, "Not erase data EEPROM"),
                         ( 2, 0x04, "Download regardless of P1"),
                         ( 2, 0x01, "12T mode")]
+
         elif (self.protocol == PROTOCOL_STC12
               and self.model[0] in (0xD1, 0xD2, 0xD3, 0xE2)):
             switches = [( 6, 0x40, "Disable reset2 low level detect"),
@@ -312,6 +313,11 @@ class Programmer:
                         (10, 0x02, "Not erase data EEPROM"),
                         (10, 0x01, "Download regardless of P1")]
             print(" WDT prescal: %d" % 2**((self.info[8] & 0x07) + 1))
+
+        elif (self.protocol == PROTOCOL_STC12
+              and self.model[0] in (0xE1, 0xE6)):
+            switches = [(8, 0x02, "Not erase data EEPROM")]
+
         else:
             switches = []
 
@@ -420,21 +426,32 @@ class Programmer:
         erase_eeprom = kwargs.get("erase_eeprom", None)
 
         dat = []
+        fosc = list(struct.pack(">I", int(self.fosc * 1000000)))
+
         if self.protocol == PROTOCOL_STC89:
             if erase_eeprom is not None:
                 self.info[2] &= 0xF7
                 self.info[2] |= 0x00 if erase_eeprom else 0x08
-            dat = [self.info[2], 0xFF, 0xFF, 0xFF]
+            dat = self.info[2:3] + [0xFF]*3
+
         elif (self.protocol == PROTOCOL_STC12
               and self.model[0] in (0xD1, 0xD2, 0xD3, 0xE2)):
             if erase_eeprom is not None:
                 self.info[10] &= 0xFD
                 self.info[10] |= 0x00 if erase_eeprom else 0x02
-            dat = [self.info[6], self.info[7], self.info[8],
-                   0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-                   self.info[10],
-                   0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
-            dat += struct.pack(">I", int(self.fosc * 1000000))
+            dat = (self.info[6:9] + [0xFF]*5 + self.info[10:11]
+                   + [0xFF]*6 + fosc)
+
+        elif (self.protocol == PROTOCOL_STC12
+              and self.model[0] in (0xE1, 0xE6)):
+            if erase_eeprom is not None:
+                self.info[8] &= 0xFD
+                self.info[8] |= 0x00 if erase_eeprom else 0x02
+            dat = (self.info[6:11] + fosc + self.info[12:16] + [0xFF]*4
+                   + self.info[8:9] + [0xFF]*7 + fosc + [0xFF]*3)
+            # print(" ".join("%02X" % i for i in dat))
+            # return True
+
         elif erase_eeprom is not None:
             logging.info("Modifying options is not supported for this target")
             return False
