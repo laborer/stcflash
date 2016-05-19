@@ -428,7 +428,7 @@ class Programmer:
         erase_eeprom = kwargs.get("erase_eeprom", None)
 
         dat = []
-        fosc = list(struct.pack(">I", int(self.fosc * 1000000)))
+        fosc = list(bytearray(struct.pack(">I", int(self.fosc * 1000000))))
 
         if self.protocol == PROTOCOL_89:
             if erase_eeprom is not None:
